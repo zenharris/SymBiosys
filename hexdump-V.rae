@@ -1,0 +1,185 @@
+ 0020  ; Hex Dumper for Symbiosys with BDOS V
+ 0030  ;
+ 0035  ; By House Harris, June MMXII
+ 0040  ; Copyright (C) 2012 Michael Brown <symbiosys@b5.net>
+ 0050  ;
+ 0060  ; This program is free software: you can redistribute it and/or modify
+ 0070  ; it under the terms of the GNU General Public License as published by
+ 0080  ; the Free Software Foundation, either version 3 of the License, or
+ 0090  ; (at your option) any later version.
+ 0100  ;
+ 0110  ; This program is distributed in the hope that it will be useful, but
+ 0120  ; WITHOUT ANY WARRANTY; without even the implied warranty of
+ 0130  ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ 0140  ; General Public License for more details.
+ 0150  ;
+ 0160  ; You should have received a copy of the GNU General Public License
+ 0170  ; along with this program. If not, see <http://www.gnu.org/licenses/>
+ 0171  ;
+ 0180             .os
+ 0190             .ba $9f00
+ 0200  s.adr      .de $20
+ 0210  linptr     .de $21
+ 0220  ln.cnt     .de $fd
+ 0230  ;
+ 0240  parm       .de $8220
+ 0250  p2scr      .de $829c
+ 0260  inccmp     .de $82b2
+ 0270  deccmp     .de $82be
+ 0280  chksad     .de $82dd
+ 0290  outbyt     .de $82fa
+ 0300  crlfsz     .de $8316
+ 0310  ocmck      .de $8325
+ 0320  zerck      .de $832e
+ 0330  spc2       .de $833f
+ 0340  space      .de $8342
+ 0350  crlf       .de $834d
+ 0360  instat     .de $8386
+ 0370  chksum     .de $867b
+ 0380  outchr     .de $8a47
+ 0390  access     .de $8b86
+ 0400  ubrkvc     .de $A676
+ 0410  ubrk       .de $804a
+ 0420  usrent     .de $8035
+ 0430  ;
+ 0440  ;
+ 0450             jmp verify
+ 0460             jmp hex.cmd
+ 0470  verify     jsr access
+ 0480             ldx #0
+ 0490  more       lda message,x
+ 0500             beq go.on
+ 0510             jsr outchr
+ 0520             inx
+ 0530             bpl more
+ 0540  ;
+ 0550  go.on      jsr parm
+ 0560  hex.cmd    jsr header
+ 0570             jsr zerck
+ 0580             jsr p2scr
+ 0590  ;
+ 0600             lda *$ff
+ 0610             sta *linptr+1
+ 0620             lda *$fe
+ 0630             sta *linptr
+ 0640  ;
+ 0650             pha
+ 0660             and #$f0
+ 0670             sta *$fe
+ 0680             jsr crlfsz
+ 0690             pla
+ 0700             sta *$fe
+ 0710             and #$f
+ 0720             sta *s.adr
+ 0730             asl a
+ 0740             clc
+ 0750             adc *s.adr
+ 0760             tax
+ 0770             jsr blank
+ 0780             lda #$10
+ 0790             sta *ln.cnt
+ 0800             sec
+ 0810             sbc *s.adr
+ 0820             tax
+ 0830  ;
+ 0840  ver.lin    ldy #0
+ 0850             lda ($fe),y
+ 0860             jsr chksad
+ 0870             jsr space
+ 0880             jsr outbyt
+ 0890             jsr inccmp
+ 0900             bvs ver.end
+ 0910             beq ver.nxt
+ 0920             bcs ver.end
+ 0930  ver.nxt    dex
+ 0940             bne ver.lin
+ 0950  ;
+ 0960             jsr ocmck
+ 0970             jsr ascii.out
+ 0980  ;
+ 0990             lda *$fe
+ 1000             sta *linptr
+ 1010             lda *$ff
+ 1020             sta *linptr+1
+ 1030  ;
+ 1040  brk.chk    jsr instat
+ 1050             bcs ver.rts
+ 1060             dec *ln.cnt
+ 1070             beq nxt.pag
+ 1080  ;
+ 1090  nxt.lin    jsr crlfsz
+ 1100             ldx #$10
+ 1110             bne ver.lin
+ 1120  ;
+ 1130  nxt.pag    jsr crlf
+ 1140             jsr header
+ 1150             lda #$10
+ 1160             sta *ln.cnt
+ 1170             bne nxt.lin
+ 1180  ;
+ 1190  ver.end    stx *ln.cnt
+ 1200  ver.end1   jsr deccmp
+ 1210             cpx #$10
+ 1220             beq checkout
+ 1230             inx
+ 1240             bpl ver.end1
+ 1250  ;
+ 1260  checkout   jsr ocmck
+ 1270             pha
+ 1280  ;
+ 1290             ldx *ln.cnt
+ 1300  out.1      dex
+ 1310             beq out.2
+ 1320             jsr space
+ 1330             jsr spc2
+ 1340             jmp out.1
+ 1350  ;
+ 1360  out.2      jsr ascii.out
+ 1370             pla
+ 1380  ver.out    jsr crlf
+ 1390             jsr chksum
+ 1400             jsr crlf
+ 1410  ;
+ 1420  ver.rts    clc
+ 1430  ;
+ 1440  ;
+ 1450             rts
+ 1460  ;
+ 1470  ;
+ 1480  header     jsr crlf
+ 1490             ldx #5
+ 1500             jsr blank
+ 1510  nxt.num    txa
+ 1520             jsr outbyt
+ 1530             jsr space
+ 1540             inx
+ 1550             cpx #$10
+ 1560             bne nxt.num
+ 1570             rts
+ 1580  ;
+ 1590  blank      cpx #0
+ 1600             beq blk.rts
+ 1610  blank1     jsr space
+ 1620             dex
+ 1630             bne blank1
+ 1640  blk.rts    rts
+ 1650  ;
+ 1660  ascii.out  jsr spc2
+ 1670             ldy #0
+ 1680  nxt.chr    lda (linptr),y
+ 1690             and #$7f
+ 1700             cmp #$20
+ 1710             bcs is.ascii
+ 1720             lda #$20
+ 1730  is.ascii   jsr outchr
+ 1740             iny
+ 1750             cpy #$10
+ 1760             bne nxt.chr
+ 1770             rts
+ 1780  ;
+ 1790  message    .by ' range : ' 0
+ 1800  ;
+ 1810             .en
+//
+
+>
