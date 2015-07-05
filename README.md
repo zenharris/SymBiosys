@@ -1,5 +1,6 @@
 # SymBiosys
 Symbiosys a 6502 operating system for IDE hard disks units.
+symbiosys@b5.net
 
 Just testing out how this all works, quickly uploaded a disk opperating system I wrote on a 1978 SYM-1 microcomputer a few years ago. I do intend getting back to this and recoding it in a real assembler rather the the Sym's Resident Assembler Editor (which actually is a very good resident assembler environment once it's patched to use Symbiosys filesystem.
 
