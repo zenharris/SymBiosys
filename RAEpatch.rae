@@ -1,0 +1,483 @@
+0020  ; RAE patch  for Symbiosys V
+ 0030  ; Based on the RAE patch published in RAE NOTES Issue 1
+ 0040  ;
+ 0050  ; By House Harris. XI June MMXII
+ 0060  ; Author: Michael Brown, symbiosys@b5.net
+ 0070  ;
+ 0080  ; resides at $7d00-$7f74, patches into RAE to provide
+ 0090  ; ENTER, LOAD and DC commands for use within RAE to
+ 0100  ; call symbiosys disk file services.
+ 0110  ;
+ 0120             .os
+ 0130  ;
+ 0140  RAE.tpres  .de $d3      ;present end of RAE text
+ 0150  diskc.vec  .de $ec      ;disck command vector
+ 0160  diski.flag .de $ee      ;RAE tape/disk input flag
+ 0170  disko.flag .de $ef      ;RAE tape/disk output flag
+ 0180  disko.vec  .de $f0      ;RAE disk output vector
+ 0190  diski.vec  .de $f2      ;RAE disk input vector
+ 0200  RAE.txtst  .de $100     ;start of RAE text area
+ 0210  RAE.txten  .de $102     ;end of RAE text area
+ 0220  RAE.crt    .de $135     ;RAE input buffer
+ 0230  ;
+ 0240  usrent     .de $8035
+ 0250  nibasc     .de $8309
+ 0260  ascnib     .de $8275
+ 0270  access     .de $8b86
+ 0280  outbyte    .de $82fa
+ 0290  outchar    .de $8a47
+ 0300  crlf       .de $834d
+ 0310  space      .de $8342
+ 0320  tout       .de $8aa0
+ 0330  intchr     .de $8a58
+ 0340  ;
+ 0350  outvec     .de $a663
+ 0360  invec      .de $a660
+ 0370  ;
+ 0380  RAE.cold   .de $b000    ;RAE cold start
+ 0390  RAE.warm   .de $b003
+ 0400  RAE.hot    .de $b05e    ;RAE warm start no message
+ 0410  RAE.error  .de $b00e    ;RAE error subroutine vector
+ 0420  ;
+ 0430  zflag      .de $eb
+ 0440  zargc      .de $4f
+ 0450  zargv[0]   .de $50
+ 0460  filenum    .de $39c
+ 0470  xfer.bytes .de $398
+ 0480  xfer.addr  .de $396
+ 0490  ;
+ 0500  pattern    .de $350
+ 0510  ivmp.addr  .de $37c
+ 0520  osflags    .de $39f
+ 0530  OpenedFile .de $3a0
+ 0540  monst.ctab .de $3fc
+ 0550  ilba0      .de $390
+ 0560  ilba8      .de $391
+ 0570  ilba16     .de $392
+ 0580  ilba24     .de $393
+ 0590  dta.ptr    .de $394
+ 0600  ;
+ 0610  call.bdos  .de $9006
+ 0620  disk.init  .de $00
+ 0630  writebytes .de $06
+ 0640  readbytes  .de $08
+ 0650  writefile  .de $0a
+ 0660  readfile   .de $0c
+ 0670  load.sect  .de $02
+ 0680  execfile   .de $16
+ 0690  ;
+ 0700  lib.puts   .de $9013
+ 0710  proc.flist .de $9031
+ 0720  dir.prnt   .de $9025
+ 0730  lib.parse  .de $9016
+ 0740  proc.cmnd  .de $9019
+ 0750  symbiosys  .de $9003
+ 0760  istr.prnt  .de $9028
+ 0770  ;
+ 0780  sectr.buff .de $200
+ 0790  line.bvff  .de $300
+ 0800  dirnt.buff .de $500
+ 0810  ;
+ 0820  file.color .de $00
+ 0830  file.name  .de file.color+1
+ 0840  file.ver   .de file.name+30
+ 0850  file.size  .de file.ver+1
+ 0860  file.ctime .de file.size+8
+ 0870  file.mtime .de file.ctime+8
+ 0880  file.atrib .de file.mtime+8
+ 0890  file.load  .de file.atrib+4
+ 0900  file.loc   .de file.load+4
+ 0910  ;
+ 0920  of.bvffer  .de $3a0
+ 0930  ;
+ 0940  of.lba     .de $00
+ 0950  of.size    .de of.lba+3
+ 0960  of.flptr   .de of.size+2
+ 0970  of.flags   .de of.flptr+2
+ 0980  ;
+ 0990  of.RAE     .de $3ef
+ 1000  ;
+ 1010  ;
+ 1020  showprgrs  .de %10000000
+ 1030  readfrwrd  .de %00000001
+ 1040  verifymode .de %00000010
+ 1050  ;
+ 1060  del        .de $7f
+ 1070  bs         .de $08
+ 1080  ;
+ 1090  !!!sb      .md (oldchar newchar)
+ 1100             cmp #oldchar
+ 1110             bne =+3
+ 1120             lda #newchar
+ 1130             .me
+ 1140  ;
+ 1150  !!!fill    .md (value dest bytes)
+ 1160             lda #value
+ 1170             ldx #bytes
+ 1180  loop...    dex
+ 1190             sta dest,x
+ 1200             bne loop...
+ 1210             .me
+ 1220  ;
+ 1230  !!!memcpy  .md (source dest bytes)
+ 1240             ldx #bytes
+ 1250  loop...    lda source-1,x
+ 1260             sta dest-1,x
+ 1270             dex
+ 1280             bne loop...
+ 1290             .me
+ 1300  ;
+ 1310  !!!parsarg .md (locvs.line)
+ 1320             lda #l,locvs.line
+ 1330             ldy #h,locvs.line
+ 1340             jsr lib.parse
+ 1350             .me
+ 1360  ;
+ 1370  !!!proccmd .md (monst.cmnds)
+ 1380             lda monst.cmnds
+ 1390             ldy monst.cmnds+1
+ 1400             jsr proc.cmnd
+ 1410             .me
+ 1420  ;
+ 1430  !!!exec    .md (zargv)
+ 1440             lda *zargv
+ 1450             ldy *zargv+1
+ 1460             ldx #execfile
+ 1470             jsr call.bdos
+ 1480             .me
+ 1490  ;
+ 1500  !!!setosfl .md (mask)
+ 1510             lda #mask
+ 1520             ora osflags
+ 1530             sta osflags
+ 1540             .me
+ 1550  ;
+ 1560  !!!bdos    .md (funct)
+ 1570             ldx #funct
+ 1580             jsr call.bdos
+ 1590             .me
+ 1600  ;
+ 1610  !!!puts    .md (outstr)
+ 1620             lda #l,outstr
+ 1630             ldy #h,outstr
+ 1640             jsr lib.puts
+ 1650             .me
+ 1660  ;
+ 1670  !!!proc    .md (function)
+ 1680             lda #l,function
+ 1690             sta ivmp.addr
+ 1700             lda #h,function
+ 1710             sta ivmp.addr+1
+ 1720             jsr proc.flist
+ 1730             .me
+ 1740  ;
+ 1750  !!!xfrdbl  .md (src dst)
+ 1760             lda src
+ 1770             sta dst
+ 1780             lda src+1
+ 1790             sta dst+1
+ 1800             .me
+ 1810  ;
+ 1820  !!!stdbl   .md (src dst)
+ 1830             lda #l,src
+ 1840             sta dst
+ 1850             lda #h,src
+ 1860             sta dst+1
+ 1870             .me
+ 1880  ;
+ 1890  !!!diag    .md (byte)
+ 1900             php
+ 1910             pha
+ 1920             lda byte
+ 1930             jsr outbyte
+ 1940             pla
+ 1950             plp
+ 1960             .me
+ 1970  ;
+ 1980  !!!gethex  .md (byte)
+ 1990             lda RAE.crt,y
+ 2000             jsr ascnib
+ 2010             bcc ...skip
+ 2020             ldx #$48
+ 2030             jmp (RAE.error)
+ 2040  ...skip    asl a
+ 2050             asl a
+ 2060             asl a
+ 2070             asl a
+ 2080             sta byte
+ 2090             iny
+ 2100             lda RAE.crt,y
+ 2110             jsr ascnib
+ 2120             bcc ...skip2
+ 2130             ldx #$49
+ 2140             jmp (RAE.error)
+ 2150  ...skip2   and #%00001111
+ 2160             ora byte
+ 2170             sta byte
+ 2180             .me
+ 2190  ;
+ 2200  !!!adddbl  .md (first second)
+ 2210             pha
+ 2220             clc
+ 2230             lda first
+ 2240             adc second
+ 2250             sta first
+ 2260             lda first+1
+ 2270             adc second+1
+ 2280             sta first+1
+ 2290             pla
+ 2300             .me
+ 2310  ;
+ 2320  !!!subdbl  .md (first second)
+ 2330             pha
+ 2340             sec
+ 2350             lda first
+ 2360             sbc second
+ 2370             sta first
+ 2380             lda first+1
+ 2390             sbc second+1
+ 2400             sta first+1
+ 2410             pla
+ 2420             .me
+ 2430  ;
+ 2440  !!!cmpdbl  .md (first second temp)
+ 2450             sec
+ 2460             lda first
+ 2470             sbc second
+ 2480             sta temp
+ 2490             lda first+1
+ 2500             sbc second+1
+ 2510             ora temp
+ 2520             .me
+ 2530  ;
+ 2540  ; .ba $f000
+ 2550             .ba $7d00
+ 2560  ; .ba $6000
+ 2570  patch      stdbl (load.file diski.vec)
+ 2580             stdbl (save.file disko.vec)
+ 2590             stdbl (disk.cmnd diskc.vec)
+ 2600             stdbl (crtin invec+1)
+ 2610  ; stdbl (crtout outvec+1)
+ 2620             jmp RAE.warm
+ 2630  ;
+ 2640  ; load.file is the entry point for the LOAD command
+ 2650  ; this version requires 1 parameter, a symbiosys filename
+ 2660  ; it will load the file if it exists with the ':' attribute
+ 2670  ; in the current directory
+ 2680  ; An overflow error (31) will occur if the RAE text area
+ 2690  ; is overrun.
+ 2700  ; A '+' preceeding the filename will append the file to the end
+ 2710  ; of the current file
+ 2720  ;
+ 2730  ;
+ 2740  load.file  cpy #$50             ;if y=50 filename is missing
+ 2750             bne have.lparm       ;y points to filename params
+ 2760             ldx #$30
+ 2770             jmp (RAE.error)      ;error 30=no filename parameters
+ 2780  ;
+ 2790  have.lparm ldx #0
+ 2800             stx *diski.flag      ;re-enable tape input
+ 2810             stx *zflag
+ 2820             lda RAE.crt,y
+ 2830             cmp #'+              ;if first char is +
+ 2840             bne not.append
+ 2850             iny
+ 2860             sta *zflag
+ 2870  not.append ldx #$ff
+ 2880  cpyloop    inx
+ 2890             lda RAE.crt,y
+ 2900             iny
+ 2910             sta pattern,x
+ 2920             cmp #$20
+ 2930             bne cpyloop
+ 2940             lda #0
+ 2950             sta pattern,x
+ 2960             sta osflags
+ 2970             setosfl (verifymode)
+ 2980             proc (fetchload)
+ 2990             bcs overflow
+ 3000             jmp uniexit
+ 3010  overflow   ldx #$31
+ 3020             jmp (RAE.error)      ;error 31=text area overflow
+ 3030  ;
+ 3040  fetchload  pla
+ 3050             pla
+ 3060  ;
+ 3070             lda *zflag
+ 3080             cmp #'+
+ 3090             beq fldappend
+ 3100             jsr falloc
+ 3110             sta of.RAE
+ 3120             tax
+ 3130             lda sectr.buff+file.size
+ 3140             sta of.bvffer+of.size,x
+ 3150             lda sectr.buff+file.size+1
+ 3160             sta of.bvffer+of.size+1,x
+ 3170  ;
+ 3180  fldappend  ldx #0
+ 3190  buffloop3  lda sectr.buff,x
+ 3200             sta dirnt.buff,x
+ 3210             inx
+ 3220             bne buffloop3
+ 3230             xfrdbl (RAE.txtst dirnt.buff+file.load) ;dirnt.buff+file.load set to
+ 3240             lda *zflag
+ 3250             cmp #'+
+ 3260             bne fload.cont
+ 3270             xfrdbl (RAE.tpres dirnt.buff+file.load) ;set to end of text for
+ 3280  fload.cont jsr crlf
+ 3290             setosfl (showprgrs)
+ 3300             bdos (readfile)      ;do the read from disk
+ 3310             jsr crlf
+ 3320             adddbl (xfer.addr xfer.bytes)    ;add bytes read to dest = end file
+ 3330             xfrdbl (xfer.addr RAE.tpres) ;set RAE end of text pointer
+ 3340             lda #$00
+ 3350             ldy #$02
+ 3360             sta (RAE.tpres),y    ;set end + 2 bytes to 0 for RAE
+ 3370  fload.exit cmpdbl (RAE.tpres RAE.txten tmp.byte)
+ 3380             rts
+ 3390  ;
+ 3400  ; save.file is the entry point for the ENTER command
+ 3410  ; This version requires 1 parameter, a symbiosys filename
+ 3420  ; it will save the RAE text area to a file in the current
+ 3430  ; directory with the default rae attribute ':'
+ 3440  ;
+ 3450  ; If the parameter is '~' instead of a filename then it
+ 3460  ; will save the RAE text area into the currently opened file,
+ 3470  ; which can be seen as the first file returned by the 'lsof'
+ 3480  ; command (DC lsof) special file handle 0 reserved for RAE
+ 3490  ;
+ 3500  save.file  cpy #$50             ;if y=50 filename is missing
+ 3510             bne have.sparm       ;y points to filename
+ 3520             ldx #$30
+ 3530             jmp (RAE.error)      ;error 30=no filename
+ 3540  ;
+ 3550  have.sparm ldx #$00
+ 3560             stx *disko.flag      ;re-enable tape output
+ 3570             lda RAE.crt,y
+ 3580             cmp #'~
+ 3590             bne newfile
+ 3600  ;
+ 3610             lda of.RAE
+ 3620             beq sfexit   ;errnofile
+ 3630             tax
+ 3640             lda of.bvffer+of.lba,x
+ 3650             sta ilba0
+ 3660             lda #0
+ 3670             sta ilba8
+ 3680             lda of.bvffer+of.lba+1,x
+ 3690             sta ilba16
+ 3700             lda of.bvffer+of.lba+2,x
+ 3710             sta ilba24
+ 3720             stdbl (dirnt.buff dta.ptr)
+ 3730             bdos (load.sect)
+ 3740             jmp existingfl
+ 3750  ;
+ 3760  sfexit     jmp uniexit  ;existingfl
+ 3770  newfile    fill ($00 dirnt.buff $ff)
+ 3780             lda #':
+ 3790             sta dirnt.buff+file.color
+ 3800             ldx #$ff
+ 3810  fnameloop  inx
+ 3820             lda RAE.crt,y
+ 3830             iny
+ 3840             sta dirnt.buff+file.name,x
+ 3850             cmp #$20
+ 3860             bne fnameloop
+ 3870             lda #0
+ 3880             sta dirnt.buff+file.name,x
+ 3890  existingfl lda #showprgrs
+ 3900             sta osflags
+ 3910             xfrdbl (RAE.txtst dirnt.buff+file.load)
+ 3920             xfrdbl (RAE.tpres dirnt.buff+file.size)
+ 3930             subdbl (dirnt.buff+file.size dirnt.buff+file.load)
+ 3940             bdos (disk.init)
+ 3950             bdos (writefile)
+ 3960  ;
+ 3970             jsr falloc
+ 3980             sta of.RAE
+ 3990             tax
+ 4000             lda dirnt.buff+file.size
+ 4010             sta of.bvffer+of.size,x
+ 4020             lda dirnt.buff+file.size+1
+ 4030             sta of.bvffer+of.size+1,x
+ 4040  ;
+ 4050  savefexit  jmp uniexit
+ 4060  ;
+ 4070  ;
+ 4080  ; disk.cmnd is the entry point for the DC command
+ 4090  ; this version requires a parameter the same as
+ 4100  ; a regular Symbiosys command line which it will
+ 4110  ; pass to the kernel for execution.
+ 4120  ; The DC command with no parameters will exit to
+ 4130  ; the symbiosys command prompt. Return to RAE with the
+ 4140  ; rae command.
+ 4150  ;
+ 4160  disk.cmnd  cpy #$50
+ 4170             bne dc.cont
+ 4180             jmp symbiosys        ;no parms jump to sybiosys prompt
+ 4190             ldx #$32
+ 4200             jmp (RAE.error)
+ 4210  dc.cont    ldx #0
+ 4220  dc.loop    lda RAE.crt,y
+ 4230             sta line.bvff,x
+ 4240             iny
+ 4250             inx
+ 4260             cmp #$20
+ 4270             bne dc.loop
+ 4280             lda RAE.crt,y
+ 4290             cmp #$20
+ 4300             bne dc.loop
+ 4310             lda #0
+ 4320             sta line.bvff-1,x
+ 4330             sta osflags
+ 4340             puts (line.bvff)
+ 4350             jsr space
+ 4360             parsarg (line.bvff)
+ 4370             lda *zargc
+ 4380             beq dc.exit
+ 4390             proccmd (monst.ctab)
+ 4400             bcs dc.exit  ; command found internally
+ 4410             exec (zargv[0])
+ 4420             bne dc.exit  ; command found in filesystem
+ 4430             jsr istr.prnt
+ 4440             .by 'command not found' $00
+ 4450  dc.exit    jmp uniexit
+ 4460  ;
+ 4470  uniexit    ldx #$ff
+ 4480             txs
+ 4490             jmp RAE.hot
+ 4500  ;
+ 4510  crtin      jsr intchr
+ 4520             sb (del bs)
+ 4530             rts
+ 4540  ;
+ 4550  crtout     sb (bs del)
+ 4560             jmp tout
+ 4570  ;
+ 4580  falloc     ldx #1       ;of.bvffer
+ 4590             ldy #0
+ 4600  cplba.loop lda ilba8,y
+ 4610             sta of.bvffer,x
+ 4620             inx
+ 4630             iny
+ 4640             cpy #3
+ 4650             bne cplba.loop
+ 4660             lda #0
+ 4670             sta of.bvffer,x
+ 4680             inx
+ 4690             sta of.bvffer,x
+ 4700             inx
+ 4710             sta of.bvffer,x
+ 4720             inx
+ 4730             sta of.bvffer,x
+ 4740             inx
+ 4750             lda #1
+ 4760             sta of.bvffer,x
+ 4770             inx
+ 4780  ; lda #1 ;of.bvffer
+ 4790  ; stx of.bvffer
+ 4800             rts
+ 4810  ;
+ 4820  tmp.byte   .by $00
+ 4830  ;
+ 4840             .en
