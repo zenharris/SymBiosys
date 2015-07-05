@@ -1,0 +1,583 @@
+ 0020  ;
+ 0030  ; Default Command Pack, Release I
+ 0040  ;
+ 0050  ; For Symbiosys with B.D.O.S. Ver. V
+ 0060  ;
+ 0070  ; By House Harris Software, June MMXII
+ 0080  ; Copyright (C) 2012 Michael Brown <symbiosys@b5.net>
+ 0090  ;
+ 0100  ; This program is free software: you can redistribute it and/or modify
+ 0110  ; it under the terms of the GNU General Public License as published by
+ 0120  ; the Free Software Foundation, either version 3 of the License, or
+ 0130  ; (at your option) any later version.
+ 0140  ;
+ 0150  ; This program is distributed in the hope that it will be useful, but
+ 0160  ; WITHOUT ANY WARRANTY; without even the implied warranty of
+ 0170  ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ 0180  ; General Public License for more details.
+ 0190  ;
+ 0200  ; You should have received a copy of the GNU General Public License
+ 0210  ; along with this program. If not, see <http://www.gnu.org/licenses/>
+ 0220  ;
+ 0230             .os
+ 0240  osflags    .de $39f     ;DOS control flags
+ 0250  cwd        .de $39d     ;2 bytes for future expansion
+ 0260  filenum    .de $39c
+ 0270  sectnum    .de $39b
+ 0280  bytenum    .de $39a
+ 0290  xfer.bytes .de $398     ; 16 bits bytes to transfer
+ 0300  xfer.addr  .de $396     ; 16 bits start addr for transfer
+ 0310  dta.ptr    .de $394     ; disk transfer buffer pointer
+ 0320  ilba24     .de $393
+ 0330  ilba16     .de $392
+ 0340  ilba8      .de $391
+ 0350  ilba0      .de $390
+ 0360  compacptr  .de $3fc
+ 0370  path.user  .de $3f8
+ 0380  ;
+ 0390  argc       .de $37f     ;$a60f
+ 0400  argv[0]    .de $380     ;$a610
+ 0410  argv[1]    .de $382     ;$a612
+ 0420  argv[2]    .de $384     ;$a614
+ 0430  argv[3]    .de $386     ;$a616
+ 0440  argv[4]    .de $388     ;$a618
+ 0450  argv[5]    .de $38a     ;$a61a
+ 0460  ;
+ 0470  zargc      .de $4f
+ 0480  zargv[0]   .de $50
+ 0490  zargv[1]   .de $52
+ 0500  zargv[2]   .de $54
+ 0510  zargv[3]   .de $56
+ 0520  zargv[4]   .de $58
+ 0530  zargv[5]   .de $5a
+ 0540  zargv[6]   .de $5c
+ 0550  zargv[7]   .de $5e
+ 0560  ;
+ 0570  ;
+ 0580  call.bdos  .de $9006    ; Call BDOS function held in reg x
+ 0590  disk.init  .de $00
+ 0600  load.sect  .de $02
+ 0610  dump.sect  .de $04
+ 0620  writebytes .de $06
+ 0630  readbytes  .de $08
+ 0640  writefile  .de $0a
+ 0650  readfile   .de $0c
+ 0660  wrt.dirent .de $0e
+ 0670  rd.dirent  .de $10
+ 0680  findfile   .de $12
+ 0690  findnext   .de $14
+ 0700  execfile   .de $16
+ 0710  delfile    .de $18      ;delete file from directory & 
+ 0720  openfile   .de $1a
+ 0730  rwsectfh   .de $1c
+ 0740  rwdirfh    .de $1e
+ 0750  ;
+ 0760  hex.dump   .de $9f03
+ 0770  symbiosys  .de $9003
+ 0780  ;
+ 0790  errorhndlr .de $9010
+ 0800  lib.puts   .de $9013
+ 0810  date.prnt  .de $901c
+ 0820  rtc.read   .de $901f
+ 0830  rtc.write  .de $9022
+ 0840  dir.prnt   .de $9025
+ 0850  istr.prnt  .de $9028
+ 0860  lib.atoi   .de $902b
+ 0870  ptrn.match .de $902e
+ 0880  proc.flist .de $9031
+ 0890  verify     .de $9034
+ 0900  ver.prompt .de $9037
+ 0910  lba.prnt   .de $903a
+ 0920  lib.parsfn .de $903d
+ 0930  ;
+ 0940  buffer.ptr .de $a0
+ 0950  word.rtrn  .de $a2
+ 0960  genbuf.pt2 .de $a4
+ 0970  fsave.x    .de $a6
+ 0980  ztemp      .de $eb
+ 0990  ;
+ 1000  warment    .de $8003
+ 1010  usrent     .de $8035
+ 1020  outbyte    .de $82fa
+ 1030  ascnib     .de $8275
+ 1040  getchar    .de $8a58
+ 1050  outchar    .de $8a47
+ 1060  crlf       .de $834d
+ 1070  space      .de $8342
+ 1080  pshove     .de $8208
+ 1090  parnr      .de $a649
+ 1100  par3       .de $a64a
+ 1110  par2       .de $a64c
+ 1120  par1       .de $a64e
+ 1130  techo      .de $a653
+ 1140  ;
+ 1150  sectr.buff .de $0200
+ 1160  osctrlblk  .de $0300
+ 1170  cli.buffer .de osctrlblk        ;size 80
+ 1180  pattern    .de cli.buffer+80    ;size 32
+ 1190  date.buff  .de pattern+32       ;size 10
+ 1200  byte.count .de date.buff+10     ;size 2
+ 1210  ;
+ 1220  ivmp.addr  .de $37c
+ 1230  ;
+ 1240  of.bvffer  .de $3a0
+ 1250  of.lba     .de $00              ;size 3
+ 1260  of.size    .de of.lba+3         ;size 2
+ 1270  of.flptr   .de of.size+2        ;size 2
+ 1280  of.flags   .de of.flptr+2       ;size 1
+ 1290  ;
+ 1300  of.rae     .de $3ef     ;temporary open file for RAE
+ 1310  ;
+ 1320  F.Aloc.Lst .de $0400
+ 1330  dirnt.buff .de $0500
+ 1340  ;
+ 1350  RAE.cold   .de $b000
+ 1360  RAE.warm   .de $b003
+ 1370  RAE.txtst  .de $100
+ 1380  RAE.tpres  .de $d3
+ 1390  ;
+ 1400  ;dir.entry .de dirnt.buff
+ 1410  file.color .de $00      ;size 1
+ 1420  file.name  .de file.color+1     ;size 30
+ 1430  file.ver   .de file.name+30     ;size 1
+ 1440  file.size  .de file.ver+1       ;size 8
+ 1450  file.ctime .de file.size+8      ;size 8
+ 1460  file.mtime .de file.ctime+8     ;size 8
+ 1470  file.atrib .de file.mtime+8     ;size 4
+ 1480  file.load  .de file.atrib+4     ;size 4
+ 1490  file.loc   .de file.load+4      ;size 4
+ 1500  file.comnt .de file.loc+4
+ 1510  ;
+ 1520  ; osflag values
+ 1530  ;
+ 1540  showprgrs  .de %10000000
+ 1550  readfrwrd  .de %00000001
+ 1560  verifymode .de %00000010
+ 1570  fullpath   .de %00000100
+ 1580  ;
+ 1590  !!!rstosfl .md (mask)
+ 1600             lda #mask
+ 1610             eor #$ff
+ 1620             and osflags
+ 1630             sta osflags
+ 1640             .me
+ 1650  !!!setosfl .md (mask)
+ 1660             lda #mask
+ 1670             ora osflags
+ 1680             sta osflags
+ 1690             .me
+ 1700  ;
+ 1710  !!!cmpdbl  .md (first second)
+ 1720             sec
+ 1730             lda first
+ 1740             sbc second
+ 1750             sta *ztemp
+ 1760             lda first+1
+ 1770             sbc second+1
+ 1780             ora *ztemp
+ 1790             .me
+ 1800  ;
+ 1810  !!!puts    .md (strng)
+ 1820             lda #l,strng
+ 1830             ldy #h,strng
+ 1840             jsr lib.puts
+ 1850             .me
+ 1860  ;
+ 1870  !!!stdbl   .md (src dst)
+ 1880             pha
+ 1890             lda #l,src
+ 1900             sta dst
+ 1910             lda #h,src
+ 1920             sta dst+1
+ 1930             pla
+ 1940             .me
+ 1950  ;
+ 1960  !!!dprintf .md (src)
+ 1970             pha
+ 1980             lda #l,src
+ 1990             sta *buffer.ptr
+ 2000             lda #h,src
+ 2010             sta *buffer.ptr+1
+ 2020             jsr date.prnt
+ 2030             pla
+ 2040             .me
+ 2050  ;
+ 2060  !!!getdate .md (dest)
+ 2070             pha
+ 2080             lda #l,dest
+ 2090             sta *buffer.ptr
+ 2100             lda #h,dest
+ 2110             sta *buffer.ptr+1
+ 2120             jsr rtc.read
+ 2130             pla
+ 2140             .me
+ 2150  ;
+ 2160  !!!datecpy .md (source dest)
+ 2170             ldx #8
+ 2180  ...loop    lda source-1,x
+ 2190             sta dest-1,x
+ 2200             dex
+ 2210             bne ...loop
+ 2220             .me
+ 2230  ;
+ 2240  !!!bdos    .md (funct)
+ 2250             ldx #funct
+ 2260             jsr call.bdos
+ 2270             .me
+ 2280  ;
+ 2290  !!!zrgatoi .md (zargv dest)
+ 2300             ldx #zargv-zargv[0]
+ 2310             lda #l,dest
+ 2320             ldy #h,dest
+ 2330             jsr lib.atoi
+ 2340             .me
+ 2350  ;
+ 2360  !!!zrgputs .md (indic.zarg)
+ 2370             ldy #$ff
+ 2380  ...loop    iny
+ 2390             lda (indic.zarg),y
+ 2400             jsr outchar
+ 2410             bne ...loop
+ 2420             .me
+ 2430  ;
+ 2440  !!!zargcpy .md (indic.zarg locvs.dest)
+ 2450             ldy #$ff
+ 2460  ...loop    iny
+ 2470             lda (indic.zarg),y
+ 2480             sta locvs.dest,y
+ 2490             bne ...loop
+ 2500             .me
+ 2510  ;
+ 2520  w          .de $00
+ 2530  r          .de $01
+ 2540  ;
+ 2550  !!!fopen   .md (mode indic.zarg)
+ 2560             ldy #$ff
+ 2570  ...loop    iny
+ 2580             lda (indic.zarg),y
+ 2590             sta pattern,y
+ 2600             bne ...loop
+ 2610             ldx #openfile
+ 2620             lda #mode
+ 2630             jsr call.bdos
+ 2640             .me
+ 2650  ;
+ 2660  !!!parsefn .md (zarg)
+ 2670             lda *zarg
+ 2680             sta *buffer.ptr
+ 2690             lda *zarg+1
+ 2700             sta *buffer.ptr+1
+ 2710             jsr lib.parsfn
+ 2720             bcs ...exit
+ 2730             adc *zarg
+ 2740             sta *zarg
+ 2750             clc
+ 2760  ...exit    .me
+ 2770  ;
+ 2780  !!!xfrdbl  .md (src dst)
+ 2790             pha
+ 2800             lda src
+ 2810             sta dst
+ 2820             lda src+1
+ 2830             sta dst+1
+ 2840             pla
+ 2850             .me
+ 2860  ;
+ 2870  !!!decdbl  .md (loc)
+ 2880             lda loc
+ 2890             bne ...skip
+ 2900             dec loc+1
+ 2910  ...skip    dec loc
+ 2920             .me
+ 2930  ;
+ 2940  !!!cmpzdbl .md (loc)
+ 2950             lda loc
+ 2960             ora loc+1
+ 2970             .me
+ 2980  ;
+ 2990  ;
+ 3000  !!!phdbl   .md (locvs)
+ 3010             lda #h,locvs
+ 3020             pha
+ 3030             lda #l,locvs
+ 3040             pha
+ 3050             .me
+ 3060  ;
+ 3070  ;
+ 3080             .ba $9600
+ 3090  ; .ba $6600
+ 3100  ; .ba $c003
+ 3110             .es
+ 3120  ;
+ 3130  tbl.lnth   .by $0c
+ 3140  tbl.width  .by $0a
+ 3150  tbl.bytes  .by $00
+ 3160  cmnd.table .by 'mon' $00
+ 3170             .si usrent
+ 3180             .by $00 $00 $00 $00
+ 3190             .by 'mkdir' $00
+ 3200             .si make.dir
+ 3210             .by $00 $00
+ 3220             .by 'store' $00
+ 3230             .si cmnd.wrtfl
+ 3240             .by $00 $00
+ 3250             .by 'fetch' $00
+ 3260             .si cmnd.fetch
+ 3270             .by $00 $00
+ 3280             .by 'hex' $00
+ 3290             .si cmnd.hex
+ 3300             .by $00 $00 $00 $00
+ 3310             .by 'rae' $00
+ 3320             .si cmnd.rae
+ 3330             .by $00 $00 $00 $00
+ 3340             .by 'date' $00
+ 3350             .si cmnd.date
+ 3360             .by $00 $00 $00
+ 3370             .by 'ls' $00
+ 3380             .si cmnd.ls
+ 3390             .by $00 $00 $00 $00 $00
+ 3400             .by 'rm' $00
+ 3410             .si cmnd.rm
+ 3420             .by $00 $00 $00 $00 $00
+ 3430             .by 'cd' $00
+ 3440             .si cmnd.user
+ 3450             .by $00 $00 $00 $00 $00
+ 3460             .by 'fclean' $00
+ 3470             .si of.clean
+ 3480             .by $00
+ 3490             .by 'exec' $00
+ 3500             .si cmnd.exec
+ 3510             .by $00 $00 $00
+ 3520  ;
+ 3530  disk.test  rts
+ 3540  ;
+ 3550  ;
+ 3560  ; cmnd.rae when called  with no argument will execute RAE
+ 3570  ; with a warm start preserving RAE current open file.
+ 3580  ; For the special condition running RAE first time, use
+ 3590  ; 'C' for the argument and it will clear the special
+ 3600  ; entry for RAE current open file then execute an RAE
+ 3610  ; cold start.
+ 3620  ;
+ 3630  cmnd.rae   lda *zargc           ; test number of arguments
+ 3640             cmp #2               ; 2 ? (1 argument)
+ 3650             bcc cr.noparm        ; jump if less (no args)
+ 3660             ldy #$00
+ 3670             lda (zargv[1]),y     ; test first letter of argument
+ 3680             cmp #'C              ; C ? (cold start RAE)
+ 3690             bne cr.err           ; jmp if not
+ 3700             lda #$00
+ 3710             tax
+ 3720  cr.loop    sta of.bvffer+1,x
+ 3730             inx                  ; clear the open file table special file 
+ 3740             cpx #$8              ; for current open RAE file (8 bytes)
+ 3750             bcc cr.loop
+ 3760             jmp RAE.cold         ; RAE cold start (never returns)
+ 3770  cr.noparm  pla
+ 3780             pla                  ; pull return address from stack
+ 3790             jmp RAE.warm         ; RAE warm start (never returns)
+ 3800  cr.err     jsr istr.prnt
+ 3810             .by '[C]' $00
+ 3820             rts
+ 3830  ;
+ 3840  cmnd.wrtfl lda *zargc
+ 3850             cmp #5
+ 3860             bne wrtfl.err
+ 3870  wrtflbegin bdos (disk.init)
+ 3880             setosfl (showprgrs)
+ 3890             jsr clr.dirnt
+ 3900             zargcpy (zargv[1] dirnt.buff+file.color)
+ 3910             zargcpy (zargv[2] dirnt.buff+file.name) ; File Name
+ 3920             zrgatoi (zargv[3] dirnt.buff+file.load) ; file mem start
+ 3930             bcs wrtfl.err
+ 3940             zrgatoi (zargv[4] dirnt.buff+file.size) ; file mem end
+ 3950             bcs wrtfl.err
+ 3960             bdos (writefile)
+ 3970  wrtfl.end  rts
+ 3980  wrtfl.err  jsr istr.prnt
+ 3990             .by '[%*:^] fn strt byts' $00
+ 4000             rts
+ 4010  ;
+ 4020  clr.dirnt  lda #$00
+ 4030             tay
+ 4040  blank.b    sta dirnt.buff,y
+ 4050             iny
+ 4060             bne blank.b
+ 4070             rts
+ 4080  ;
+ 4090  cmnd.hex   lda *zargc
+ 4100             cmp #3
+ 4110             beq hexbegin
+ 4120             jsr istr.prnt
+ 4130             .by 'start end' $00
+ 4140             rts
+ 4150  hexbegin   zrgatoi (zargv[1] par3)
+ 4160             bcs hexend
+ 4170             jsr pshove
+ 4180             inc parnr
+ 4190             zrgatoi (zargv[2] par3)
+ 4200             bcs hexend
+ 4210             inc parnr
+ 4220             jsr hex.dump
+ 4230  hexend     rts
+ 4240  ;
+ 4250  cmnd.date  stdbl (date.buff buffer.ptr)
+ 4260             jsr rtc.read
+ 4270             jsr date.prnt
+ 4280             puts (tzone)
+ 4290             rts
+ 4300  ;
+ 4310  ;
+ 4320  ; fetchload called after file is found by directory search
+ 4330  ; will load that file into memory at location
+ 4340  ; specified by the loadpoint field of the directory entry
+ 4350  ; for the found file (in sect.buff)
+ 4360  ; If a numeric argument is provided it will load the file
+ 4370  ; into memory at the location specified by the argument.
+ 4380  ; If the file is a symbiosys command pack it will load it
+ 4390  ; then patch it into the symbiosys kernel for immediate use.
+ 4400  ; Do not load a non-relocateable command pack into a location
+ 4410  ; other than it's intended loadpoint.
+ 4420  ;
+ 4430  fetchload  ldx #0
+ 4440  ftch.loop  lda sectr.buff,x     ; copy buff with found file dir entry
+ 4450             sta dirnt.buff,x     ; into dir entry buff for rd/wrt/creat file
+ 4460             inx                  ; 256 bytes
+ 4470             bne ftch.loop
+ 4480             setosfl (showprgrs)  ; turn on file progress reporting
+ 4490             lda *zargc                   ; test number of arguments
+ 4500             cmp #$3                      ; 3 ? (2 arguments)
+ 4510             bcc ftch.narg        ; jump if less
+ 4520             zrgatoi (zargv[2] dirnt.buff+file.load) ; set load addr from arg 1
+ 4530             bcs ftch.barg                ; jmp if asc2int failed
+ 4540  ftch.narg  lda dirnt.buff+file.color    ; test file attribute
+ 4550             cmp #'^                      ; command pack
+ 4560             bne ftch.ncp                 ; jump if not
+ 4570             xfrdbl (dirnt.buff+file.load compacptr) ; load addr > cmdpac vec
+ 4580  ftch.ncp   bdos (readfile)
+ 4590             rts
+ 4600  ftch.barg  jsr istr.prnt
+ 4610             .by 'dst err' $00
+ 4620             rts
+ 4630  ;
+ 4640  ;
+ 4650  of.clean   ldx #$46     ;50
+ 4660             lda #0
+ 4670  clear.oft  sta of.bvffer-1+9,x
+ 4680             dex
+ 4690             bne clear.oft
+ 4700             lda #9
+ 4710             sta of.bvffer
+ 4720             rts
+ 4730  ;
+ 4740  !!!batchpr .md (execd.code)
+ 4750             lda #l,execd.code
+ 4760             sta ivmp.addr
+ 4770             lda #h,execd.code
+ 4780             sta ivmp.addr+1
+ 4790             jmp call.flist
+ 4800             .me
+ 4810  ;
+ 4820  call.flist lda *zargc
+ 4830             cmp #2
+ 4840             bcc cfl.noarg
+ 4850             parsefn (zargv[1])
+ 4860             bcs cfl.err
+ 4870             ldy #$00
+ 4880             lda (zargv[1]),y
+ 4890             bne cfl.hasfn
+ 4900  cfl.noarg  lda #l,wildcard
+ 4910             sta *zargv[1]
+ 4920             lda #h,wildcard
+ 4930             sta *zargv[1]+1
+ 4940  cfl.hasfn  zargcpy (zargv[1] pattern)
+ 4950             jmp proc.flist
+ 4960  cfl.err    jsr istr.prnt
+ 4970             .by 'fn' $00
+ 4980             rts
+ 4990  ;
+ 5000  proc.ls    jsr dir.prnt
+ 5010             rts
+ 5020  ;
+ 5030  cmnd.ls    setosfl (readfrwrd)
+ 5040             batchpr (proc.ls)
+ 5050  ;
+ 5060  proc.rm    jsr dir.prnt
+ 5070             bdos (delfile)
+ 5080             rts
+ 5090  ;
+ 5100  cmnd.rm    setosfl (verifymode)
+ 5110             batchpr (proc.rm)
+ 5120  ;
+ 5130  proc.fetch pla
+ 5140             pla
+ 5150             jmp fetchload
+ 5160  ;
+ 5170  cmnd.fetch lda *zargc
+ 5180             cmp #2
+ 5190             bcc ftch.err
+ 5200  ftch.cont  setosfl (verifymode)
+ 5210             batchpr (proc.fetch)         ; never returns
+ 5220  ftch.err   jsr istr.prnt
+ 5230             .by 'fn [dest]' $00
+ 5240             rts
+ 5250  ;
+ 5260  ;
+ 5270  make.dir   lda *zargc
+ 5280             cmp #4
+ 5290             beq mdirbegin
+ 5300             jsr istr.prnt
+ 5310             .by 'area ? ?' $00
+ 5320             rts
+ 5330  mdirbegin  bdos (disk.init)
+ 5340             stdbl (sectr.buff dta.ptr)
+ 5350             setosfl (showprgrs)
+ 5360             lda #$00
+ 5370             sta ilba0
+ 5380             sta ilba8
+ 5390             sta ilba24
+ 5400             zrgatoi (zargv[1] ilba16)
+ 5410             lda #$00
+ 5420             tay
+ 5430  blank.loop sta sectr.buff,y
+ 5440             iny
+ 5450             bne blank.loop
+ 5460  dump.sects bdos (dump.sect)
+ 5470             inc ilba0
+ 5480             bne dump.sects
+ 5490             lda #1
+ 5500             sta sectr.buff
+ 5510             lda #0
+ 5520             sta ilba0
+ 5530             ldx #4
+ 5540             jsr lba.prnt
+ 5550             bdos (dump.sect)
+ 5560             rts
+ 5570  ;
+ 5580  cmnd.user  lda *zargc
+ 5590             cmp #1
+ 5600             beq user.prnt
+ 5610  user.set   zrgatoi (zargv[1] cwd)
+ 5620  user.prnt  lda cwd+1
+ 5630             jsr outbyte
+ 5640             lda cwd
+ 5650             jsr outbyte
+ 5660             rts
+ 5670  ;
+ 5680  ;
+ 5690  cmnd.exec  lda *zargc
+ 5700             cmp #2
+ 5710             beq exec.cont
+ 5720  exec.err   jsr istr.prnt
+ 5730             .by 'addr' $00
+ 5740             rts
+ 5750  exec.cont  zrgatoi (zargv[1] ivmp.addr)
+ 5760             bcs exec.err
+ 5770             jmp (ivmp.addr)
+ 5780             ;
+ 5790  tzone      .by ' est' $00
+ 5800  wildcard   .by '*' $00
+ 5810             .en
+//
+
+>
