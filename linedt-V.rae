@@ -1,0 +1,365 @@
+ 0020  ;
+ 0030  ; Line Editor for Symbiosys BDOS V
+ 0040  ;
+ 0050  ; By House Harris - June MMXII
+ 0060  ; Copyright (C) 2012 Michael Brown <symbiosys@b5.net>
+ 0070  ;
+ 0080  ; This program is free software: you can redistribute it and/or modify
+ 0090  ; it under the terms of the GNU General Public License as published by
+ 0100  ; the Free Software Foundation, either version 3 of the License, or
+ 0110  ; (at your option) any later version.
+ 0120  ;
+ 0130  ; This program is distributed in the hope that it will be useful, but
+ 0140  ; WITHOUT ANY WARRANTY; without even the implied warranty of
+ 0150  ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ 0160  ; General Public License for more details.
+ 0170  ;
+ 0180  ; You should have received a copy of the GNU General Public License
+ 0190  ; along with this program. If not, see <http://www.gnu.org/licenses/>
+ 0200  ;
+ 0210             .os
+ 0220  access     .de $8b86
+ 0230  no.access  .de $8b9c
+ 0240  usrent     .de $8035
+ 0250  outchr     .de $8a47
+ 0260  outbyte    .de $82fa
+ 0270  intchr     .de $8a58
+ 0280  saver      .de $8188
+ 0290  resall     .de $81c4
+ 0300  techo      .de $a653
+ 0310  no.echo    .di $00
+ 0320  echo.on    .di $80
+ 0330  ;
+ 0340  tbl.ptr    .de $0010
+ 0350  line.ptr   .de $0012
+ 0360  ;
+ 0370  osctrlblk  .de $0300
+ 0380  save.a     .de osctrlblk+$f0    ;size 1
+ 0390  save.y     .de save.a+1         ;size 1
+ 0400  save.pc    .de save.y+1         ;size 2
+ 0410  char.count .de save.pc+2        ;size 1
+ 0420  bcd.conv   .de char.count+1     ;size 2
+ 0430  ;
+ 0440  ;
+ 0450  !!!incd    .md (loc)
+ 0460             inc loc
+ 0470             bne ...skip
+ 0480             inc loc+1
+ 0490  ...skip    .me
+ 0500  ;
+ 0510  !!!phdbl   .md (addr)
+ 0520             lda #h,addr
+ 0530             pha
+ 0540             lda #l,addr
+ 0550             pha
+ 0560             .me
+ 0570  ;
+ 0580  !!!ldtbl   .md (table)          ;set up commands table
+ 0590             lda #l,table
+ 0600             sta *tbl.ptr
+ 0610             lda #h,table
+ 0620             sta *tbl.ptr+1
+ 0630             .me
+ 0640  ;
+ 0650  !!!stdbl   .md (src dest)
+ 0660             lda #l,src
+ 0670             sta *dest
+ 0680             lda #h,src
+ 0690             sta *dest+1
+ 0700             .me
+ 0710  ;
+ 0720  !!!hex2bcd .md (bin bcd)
+ 0730             txa
+ 0740             pha
+ 0750             sed
+ 0760             lda #0
+ 0770             sta bcd
+ 0780             sta bcd+1
+ 0790             ldx #8
+ 0800  ...cnvbit  asl bin
+ 0810             lda bcd
+ 0820             adc bcd
+ 0830             sta bcd
+ 0840             lda bcd+1
+ 0850             adc bcd+1
+ 0860             sta bcd+1
+ 0870             dex
+ 0880             bne ...cnvbit
+ 0890             cld
+ 0900             pla
+ 0910             tax
+ 0920             .me
+ 0930  ;
+ 0940             .es
+ 0950             .ba $9d00
+ 0960  edit.line  jsr access           ;enable system ram write
+ 0970             lda #no.echo
+ 0980             sta techo            ;set no echo for kbd entry
+ 0990             jsr no.access
+ 1000  ;
+ 1010             ldtbl (cmnd.tbl)     ;load command table into ptr variable
+ 1020             lda #$ff             ;save cursor position
+ 1030             jsr table.proc
+ 1040  ;
+ 1050             ldy #$0
+ 1060  greetloop  lda (line.ptr),y     ;initial print buffer
+ 1070             beq end.greet
+ 1080             jsr outchr
+ 1090             iny
+ 1100             bne greetloop
+ 1110  ;
+ 1120  end.greet  lda #$fe             ;restore cursor position
+ 1130             jsr table.proc
+ 1140  ;
+ 1150  ; Main charachter input loop starts here
+ 1160  ;
+ 1170             ldy #$00             ;set line index ptr to begin of line
+ 1180  inp.loop   jsr intchr           ;get character from kbd
+ 1190             and #%01111111       ;mask off bit 7
+ 1200  ;
+ 1210  exit.test  cmp #$0d             ;exit condition test
+ 1220             bne continue
+ 1230             jmp exit
+ 1240  continue   nop
+ 1250  ;
+ 1260  ; cmp #escape.chr
+ 1270  ; bne not.funct
+ 1280  ; jsr intchr
+ 1290  ;
+ 1300  ; cmp #'[
+ 1310  ; bne reloop
+ 1320  ; jsr intchr
+ 1330  ; jsr table.proc
+ 1340  ; jmp reloop
+ 1350  ;
+ 1360  ; not.funct nop ; End of Function Key Processing
+ 1370             jsr table.proc       ;enter command processor does everything
+ 1380             cmp #$20
+ 1390             bcc reloop           ;char >= $20 not printable don't print
+ 1400             jsr outchr
+ 1410  reloop     jmp inp.loop         ;loop back to kbd input
+ 1420  ;
+ 1430  exit       jsr access
+ 1440             lda #echo.on         ;upon exit
+ 1450             sta techo            ;reset echo on kbd input
+ 1460             jsr no.access
+ 1470             rts
+ 1480  ;
+ 1490  ; end of main character input loop    begin subroutines
+ 1500  ;
+ 1510  ; processing for inserting char at index ptr position
+ 1520  ;
+ 1530  inschr     cmp #$20             ;printable chars >=$20
+ 1540             bcs start.ins        ;insert only them
+ 1550             sec                  ;set carry stops scr output
+ 1560             rts
+ 1570  start.ins  pha                  ;push a onto stack for insertion
+ 1580             sty save.y           ;store y into variable for comparison
+ 1590  find.eos   lda (line.ptr),y     ;read chars to find end of line
+ 1600             cmp #$00             ;end of line marker
+ 1610             beq chr.push         ;when end of line found
+ 1620             iny                  ;advance index pointer
+ 1630             bne find.eos         ;loop back still looking for eos
+ 1640  chr.push   lda (line.ptr),y     ;load char at index ptr
+ 1650             iny                  ;advance index ptr 1 byte
+ 1660             sta (line.ptr),y     ;store character there
+ 1670             dey                  ;set back index ptr 1 byte
+ 1680             cpy save.y           ;when index ptr=saved index ptr
+ 1690             beq end.push         ;a 1 byte hole has been opened up
+ 1700             dey                  ;until then decrement index ptr
+ 1710             jmp chr.push         ;and loop back
+ 1720  end.push   pla                  ;restore a from stack
+ 1730             sta (line.ptr),y     ;store it in hole opened up in line
+ 1740             iny                  ;set index prt to next char position
+ 1750             clc                  ;clear carry allows scr output
+ 1760  end.ins    rts
+ 1770  ;
+ 1780  ; processing for backspace
+ 1790  ;
+ 1800  backspace  cpy #$0              ;if index ptr = 0 at begin of line
+ 1810             bne del.cont         ;continue if not begin of line
+ 1820             sec                  ;set carry stops screen sequence
+ 1830             rts
+ 1840  del.cont   dey                  ;decrement index ptr
+ 1850  ;
+ 1860  ; processing for delete char forward
+ 1870  ;
+ 1880  delchr     lda (line.ptr),y     ;load char at index ptr
+ 1890             cmp #$0              ;0= already at end of line
+ 1900             bne begin.del        ;if not eol continue
+ 1910             sec                  ;set carry stops screen sequence
+ 1920             rts
+ 1930  begin.del  tya                  ;push index ptr onto stack
+ 1940             pha
+ 1950  chr.pull   lda (line.ptr),y     ;load char at index ptr
+ 1960             cmp #$0              ;if it = 0 it is end of line
+ 1970             beq end.delchr       ;exit without deleting
+ 1980             iny                  ;set index ptr to next char
+ 1990             lda (line.ptr),y     ;load char at index ptr
+ 2000             dey                  ;set index ptr back 1 char
+ 2010             sta (line.ptr),y     ;store char at index ptr
+ 2020             iny                  ;set index ptr to next char
+ 2030             bne chr.pull         ;loop back if not overflow
+ 2040  end.delchr pla
+ 2050             tay                  ;restore index ptr from stack
+ 2060             clc                  ;set carry outputs screen sequence
+ 2070             rts
+ 2080  ;
+ 2090  ; processing for right arrow
+ 2100  ;
+ 2110  r.arrow    lda (line.ptr),y     ;load chr at index ptr
+ 2120             cmp #$00             ;if chr = 0
+ 2130             beq eol              ;then it is at end of line
+ 2140             iny                  ;if not increment index ptr
+ 2150             clc                  ;clear carry to output screen sequence
+ 2160             rts
+ 2170  eol        sec                  ;set carry to stop screen sequence
+ 2180             rts
+ 2190  ;
+ 2200  ; processing for left arrow
+ 2210  ;
+ 2220  l.arrow    cpy #$00             ;index ptr = 0
+ 2230             beq bol              ;then it is begin of line
+ 2240             dey                  ;if not decrement index ptr
+ 2250             clc                  ;clear carry to output screen sequence
+ 2260             rts
+ 2270  bol        sec                  ;set carry to stop screen output
+ 2280             rts
+ 2290  ;
+ 2300  ; processing for set end of line
+ 2310  ;
+ 2320  set.eol    sec
+ 2330             lda (line.ptr),y
+ 2340             beq eol.ret
+ 2350             lda #$0
+ 2360             sta char.count
+ 2370  eol.loop   inc char.count
+ 2380             iny
+ 2390             lda (line.ptr),y
+ 2400             bne eol.loop
+ 2410  eol.found  jsr decimalise
+ 2420             clc
+ 2430  eol.ret    rts
+ 2440  ;
+ 2450  ; processing for set beginning of line
+ 2460  ;
+ 2470  set.bol    sec
+ 2480             cpy #$0
+ 2490             beq bol.ret
+ 2500             lda #$0
+ 2510             sta char.count
+ 2520  bol.loop   inc char.count
+ 2530             dey
+ 2540             bne bol.loop
+ 2550  bol.found  jsr decimalise
+ 2560             clc
+ 2570  bol.ret    rts
+ 2580  ;
+ 2590  decimalise hex2bcd (char.count bcd.conv)
+ 2600             lda bcd.conv
+ 2610             rts
+ 2620  ;
+ 2630  ;
+ 2640  ; Command Table Processor
+ 2650  ;
+ 2660  ;
+ 2670  table.proc sta save.a           ;store a in variable for comparison
+ 2680             pha
+ 2690             tya                  ;push a and y onto stack
+ 2700             pha
+ 2710             ldy #$00             ;init search index to prepare for.....
+ 2720  tbl.srch   cpy tbl.bytes        ;begin search loop, test index pointer
+ 2730             bcs table.exit       ;if >= length of table = not found exit
+ 2740             lda (tbl.ptr),y
+ 2750             cmp #$ee             ;default entry tag
+ 2760             beq ele.found
+ 2770             cmp save.a           ;match with search tag
+ 2780             beq ele.found        ;if a matches tag then element is found
+ 2790             tya
+ 2800             clc
+ 2810             adc tbl.width        ;add width of 1 table element
+ 2820             bcs table.exit       ;overflow = not found exit
+ 2830             tay
+ 2840             bcc tbl.srch         ;end of search loop ret to begin always
+ 2850  ele.found  iny                  ;Table element to process
+ 2860             lda (tbl.ptr),y      ;next two bytes are address
+ 2870             sta save.pc          ;of subroutine to execute
+ 2880             iny
+ 2890             lda (tbl.ptr),y      ;pack it into variable
+ 2900             sta save.pc+1
+ 2910             ora save.pc          ;determines if variable is zero
+ 2920             beq dont.exec        ;if it is zero don't execute it
+ 2930             tya
+ 2940             tax                  ;transfer search index ptr into x
+ 2950             pla
+ 2960             tay                  ;restore y from stack ready to execute
+ 2970             phdbl (ret.point-1)  ;push return point onto stack
+ 2980             lda save.a           ;now a & y = before table processor
+ 2990             clc                  ;carry used as flag from subroutin
+ 3000             jmp (save.pc)
+ 3010  ret.point  sta save.a
+ 3020             tya  ;push y on stack preserves changes
+ 3030             pha                  ;occuring out in subroutine
+ 3040             txa
+ 3050             tay                  ;restore search index ptr from x
+ 3060             bcs table.exit       ;if carry set don't eject screen sequence
+ 3070  dont.exec  iny
+ 3080             lda (tbl.ptr),y      ;this byte is length of screen sequence
+ 3090             tax                  ;put it in x
+ 3100             iny
+ 3110  eject      lda (tbl.ptr),y      ;load char to output to screen
+ 3120             cmp #$ff
+ 3130             bne no.subst
+ 3140             lda save.a
+ 3150             jsr outbyte
+ 3160             jmp aftersubst
+ 3170  no.subst   jsr outchr
+ 3180  aftersubst iny
+ 3190             dex
+ 3200             bne eject            ;until length number countdow
+ 3210  table.exit pla
+ 3220             tay                  ;restore y and a 
+ 3230             pla                  ;as if table processor never happened
+ 3240             rts
+ 3250  ;
+ 3260  ;save.a .by $00
+ 3270  ;save.y .by $00
+ 3280  ;save.pc .by $00 $00
+ 3290  ;char.count .by $00
+ 3300  ;bcd.conv .by $00 $00
+ 3310  ;
+ 3320  tbl.lenth  .by $09
+ 3330  tbl.width  .by $0C
+ 3340  tbl.bytes  .by $6C
+ 3350  cmnd.tbl   .by $ff
+ 3360             .si $0000
+ 3370             .by $02 $1b '7' $00 $00 $00 $00 $00 $00
+ 3380             .by $fe
+ 3390             .si $0000
+ 3400             .by $02 $1b '8' $00 $00 $00 $00 $00 $00
+ 3410             .by $13
+ 3420             .si l.arrow
+ 3430             .by $04 $1b '[1D' $00 $00 $00 $00
+ 3440             .by $04
+ 3450             .si r.arrow
+ 3460             .by $04 $1b '[1C' $00 $00 $00 $00
+ 3470             .by $15
+ 3480             .si delchr
+ 3490             .by $04 $1b '[1P' $00 $00 $00 $00
+ 3500             .by $7f
+ 3510             .si backspace
+ 3520             .by $08 $1b '[1D' $1b '[1P'
+ 3530             .by $06
+ 3540             .si set.eol
+ 3550             .by $04 $1b '[' $ff 'C' $00 $00 $00 $00
+ 3560             .by $01
+ 3570             .si set.bol
+ 3580             .by $04 $1b '[' $ff 'D' $00 $00 $00 $00
+ 3590             .by $ee
+ 3600             .si inschr
+ 3610             .by $04 $1b '[1@' $00 $00 $00 $00
+ 3620  ;
+ 3630             .en
+//
+
+>
