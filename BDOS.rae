@@ -1,0 +1,833 @@
+ 0020  ;
+ 0030  ;    B.D.O.S   Ver. V
+ 0040  ; Symbiosys Disk Operating System
+ 0050  ;
+ 0060  ; By House Harris  - June MMXII
+ 0070  ;
+ 0080  ; Copyright (C) 2012 Michael Brown <symbiosys@b5.net>
+ 0090  ;
+ 0100  ; This program is free software: you can redistribute it and/or modify
+ 0110  ; it under the terms of the GNU General Public License as published by
+ 0120  ; the Free Software Foundation, either version 3 of the License, or
+ 0130  ; (at your option) any later version.
+ 0140  ;
+ 0150  ; This program is distributed in the hope that it will be useful, but
+ 0160  ; WITHOUT ANY WARRANTY; without even the implied warranty of
+ 0170  ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ 0180  ; General Public License for more details.
+ 0190  ;
+ 0200  ; You should have received a copy of the GNU General Public License
+ 0210  ; along with this program. If not, see <http://www.gnu.org/licenses/>
+ 0220  ;
+ 0230             .os
+ 0240             .es
+ 0250  via2       .de $a800
+ 0260  porta      .de via2
+ 0270  ddra       .de via2+2
+ 0280  portb      .de via2+15
+ 0290  ddrb       .de via2+3
+ 0300  b_RD       .di %00001000
+ 0310  nb_RD      .di %11110111
+ 0320  b_WR       .di %00010000
+ 0330  nb_WR      .di %11101111
+ 0340  b_CS0      .di %00100000
+ 0350  ZT1        .de $B0
+ 0360  ZT2        .de $B2
+ 0370  ;
+ 0380  cmd.ident  .di $ec
+ 0390  cmd.rdsect .di $20
+ 0400  cmd.wrsect .di $30
+ 0410  reg.cmd    .di $07
+ 0420  reg.status .di $07
+ 0430  reg.data   .di $00
+ 0440  reg.sector .di $03
+ 0450  reg.cyllo  .di $04
+ 0460  reg.cylhi  .di $05
+ 0470  reg.head   .di $06
+ 0480  reg.count  .di $02
+ 0490  reg.lba0   .di 3
+ 0500  reg.lba8   .di 4
+ 0510  reg.lba16  .di 5
+ 0520  reg.lba24  .di 6
+ 0530  stat.error .di $01
+ 0540  stat.busy  .di $80
+ 0550  stat.dreq  .di $08
+ 0560  stat.ready .di $40
+ 0570  ;
+ 0580  argc       .de $37f
+ 0590  argv[0]    .de $380
+ 0600  argv[1]    .de $382
+ 0610  argv[2]    .de $384
+ 0620  argv[3]    .de $386
+ 0630  argv[4]    .de $388
+ 0640  argv[5]    .de $38a
+ 0650  argv[6]    .de $38c
+ 0660  argv[7]    .de $38e
+ 0670  ;
+ 0680  osflags    .de $39f     ;DOS Control flags
+ 0690  cwd        .de $39d     ;2 unused bytes for expansion
+ 0700  filenum    .de $39c
+ 0710  sectnum    .de $39b
+ 0720  bytenum    .de $39a
+ 0730  xfer.bytes .de $398     ; bytes to transfer 16 bit number
+ 0740  xfer.addr  .de $396     ; disk transfer addr 16 bit num
+ 0750  dta.ptr    .de $394     ; disk transfer buffer
+ 0760  ilba24     .de $393
+ 0770  ilba16     .de $392
+ 0780  ilba8      .de $391
+ 0790  ilba0      .de $390
+ 0800  path.user  .de $3f8
+ 0810  lba.mode   .di %11100000
+ 0820  lba24mask  .di %00001111
+ 0830  ;
+ 0840  access     .de $8b86
+ 0850  outbyte    .de $82fa
+ 0860  outchar    .de $8a47
+ 0870  ;
+ 0880  showprgrs  .de %10000000
+ 0890  readfrwd   .de %00000001
+ 0900  fullpath   .de %00000100
+ 0910  ;
+ 0920  ; .ba $9200
+ 0930  ; .ba $6200
+ 0940  ;        Jump Table;
+ 0950  ;
+ 0960             .ba $9006
+ 0970             jmp call.bdos
+ 0980             jmp init.bdos
+ 0990  ;
+ 1000             .ba $9100
+ 1010  ivmpi      .si disk.init
+ 1020             .si load.sect
+ 1030             .si dump.sect
+ 1040             .si writebytes
+ 1050             .si readbytes
+ 1060             .si writefile
+ 1070             .si readfile
+ 1080             .si wrt.dirent
+ 1090             .si rd.dirent
+ 1100             .si findfile
+ 1110             .si findnext
+ 1120             .si execfile
+ 1130             .si delfile
+ 1140             .si openfile
+ 1150             .si rw.sectfh
+ 1160             .si rw.dirfh
+ 1170  ;
+ 1180  diskinit   .de $00
+ 1190  loadsect   .de $02
+ 1200  dumpsect   .de $04
+ 1210  wrtdir     .de $0e
+ 1220  rddir      .de $10
+ 1230  ;
+ 1240  ;execfile rts
+ 1250  ;
+ 1260  ivmp.tbl   .de $a600
+ 1270  ;
+ 1280  !!!bdos    .md (funct)
+ 1290             ldx #funct
+ 1300             jsr call.bdos
+ 1310             .me
+ 1320  ;
+ 1330  call.bdos  pha
+ 1340             lda ivmp.tbl,x
+ 1350             sta ivmp.addr
+ 1360             lda ivmp.tbl+1,x
+ 1370             sta ivmp.addr+1
+ 1380             pla
+ 1390             jmp (ivmp.addr)
+ 1400  ;
+ 1410  init.bdos  ldx #$20
+ 1420  cpvect     lda ivmpi-1,x
+ 1430             sta ivmp.tbl-1,x
+ 1440             dex
+ 1450             bne cpvect
+ 1460  ; lda #$00
+ 1470  ; sta cwd
+ 1480  ; sta cwd+1
+ 1490  ; ldx #$50
+ 1500  ;clear.oft sta of.bvffer-1,x
+ 1510  ; dex
+ 1520  ; bne clear.oft
+ 1530  ; lda #1
+ 1540  ; sta of.bvffer
+ 1550             rts
+ 1560  ;
+ 1570  ;
+ 1580  disk.init  jsr access
+ 1590             lda #$ff
+ 1600             sta ddra
+ 1610             lda #b_WR+b_RD+b_CS0
+ 1620             sta porta
+ 1630             rts
+ 1640  ;
+ 1650  ;
+ 1660  read.id    rts
+ 1670  ;
+ 1680  wait.ntbsy lda #stat.busy
+ 1690  wait.stlow sta *ZT2
+ 1700  i_wsl1     ldx #reg.status
+ 1710             jsr progress
+ 1720             jsr read.reg
+ 1730             bit *ZT2
+ 1740             bne i_wsl1
+ 1750             clc
+ 1760             rts
+ 1770  ;
+ 1780  wait.good  jsr wait.ntbsy
+ 1790  wait.ready lda #stat.ready
+ 1800             .by $2c
+ 1810  wait.dreq  lda #stat.dreq
+ 1820  wait.sthi  sta *ZT2
+ 1830  i_wsh1     ldx #reg.status
+ 1840             jsr progress
+ 1850             jsr read.reg
+ 1860             bit *ZT2
+ 1870             beq i_wsh1
+ 1880             clc
+ 1890             rts
+ 1900  ;
+ 1910  ;chk.error ldx #reg.status
+ 1920  ; jsr read.reg
+ 1930  ; and #stat.error
+ 1940  ; cmp #0
+ 1950  ; rts
+ 1960  ;
+ 1970  read.reg   lda #0
+ 1980             sta ddrb
+ 1990             txa
+ 2000             ora #b_RD+b_WR
+ 2010             sta porta
+ 2020             and #nb_RD
+ 2030             sta porta
+ 2040             ldx portb
+ 2050             ora #b_RD
+ 2060             sta porta
+ 2070             ora #b_CS0
+ 2080             sta porta
+ 2090             txa
+ 2100             rts
+ 2110  ;
+ 2120  write.reg  pha
+ 2130             lda #$ff
+ 2140             sta ddrb
+ 2150             txa
+ 2160             ora #b_RD+b_WR
+ 2170             sta porta
+ 2180             tax
+ 2190             pla
+ 2200             sta portb
+ 2210             txa
+ 2220             and #nb_WR
+ 2230             sta porta
+ 2240             ora #b_WR
+ 2250             sta porta
+ 2260             ora #b_CS0
+ 2270             sta porta
+ 2280             rts
+ 2290  ;
+ 2300  ;
+ 2310  send.lba   jsr wait.good
+ 2320             lda ilba24
+ 2330             and #lba24mask
+ 2340             ora #lba.mode
+ 2350             sta ilba24
+ 2360             jsr ilba0.prnt
+ 2370             lda ilba0
+ 2380             ldx #reg.lba0
+ 2390             jsr write.reg
+ 2400             lda ilba8
+ 2410             ldx #reg.lba8
+ 2420             jsr write.reg
+ 2430             lda ilba16
+ 2440             ldx #reg.lba16
+ 2450             jsr write.reg
+ 2460             lda ilba24
+ 2470             ldx #reg.lba24
+ 2480             jsr write.reg
+ 2490             lda #1
+ 2500             ldx #reg.count
+ 2510             jmp write.reg
+ 2520  ;
+ 2530  ;
+ 2540  load.sect  jsr send.lba
+ 2550             lda #cmd.rdsect
+ 2560             ldx #reg.cmd
+ 2570             jsr write.reg
+ 2580             jsr wait.ready
+ 2590             jsr wait.dreq
+ 2600             ldy #0
+ 2610             lda dta.ptr
+ 2620             sta *ZT1
+ 2630             lda dta.ptr+1
+ 2640             sta *ZT1+1
+ 2650  rs1        ldx #reg.data
+ 2660             jsr read.reg
+ 2670             sta (ZT1),y
+ 2680             iny
+ 2690             bne rs1
+ 2700             jmp wait.good
+ 2710  ;
+ 2720  ;
+ 2730  ;test.code bdos (diskinit)
+ 2740  ; ldx #1
+ 2750  ; stx ilba0
+ 2760  ; ldx #0
+ 2770  ; stx ilba8
+ 2780  ; stx ilba16
+ 2790  ; stx ilba24
+ 2800  ; lda #l,$200
+ 2810  ; sta dta.ptr
+ 2820  ; lda #h,$200
+ 2830  ; sta dta.ptr+1
+ 2840  ; jmp load.sect
+ 2850  ;
+ 2860  dump.sect  jsr send.lba
+ 2870             lda #cmd.wrsect
+ 2880             ldx #reg.cmd
+ 2890             jsr write.reg
+ 2900             jsr wait.ntbsy
+ 2910             jsr wait.dreq
+ 2920             ldy #0
+ 2930             lda dta.ptr
+ 2940             sta *ZT1
+ 2950             lda dta.ptr+1
+ 2960             sta *ZT1+1
+ 2970  wrt.loop   lda (ZT1),y
+ 2980             ldx #reg.data
+ 2990             jsr write.reg
+ 3000             iny
+ 3010             bne wrt.loop
+ 3020             jmp wait.good
+ 3030  ; jmp chk.error
+ 3040  ;
+ 3050  progress   php
+ 3060             pha
+ 3070             lda #showprgrs
+ 3080             bit osflags
+ 3090             beq progskip
+ 3100             lda #'*
+ 3110             jsr outchar
+ 3120  progskip   pla
+ 3130             plp
+ 3140             rts
+ 3150  ;
+ 3160  lba.prnt   .de $903a
+ 3170  ;
+ 3180  ilba0.prnt lda #showprgrs
+ 3190             bit osflags
+ 3200             beq lba0p.end
+ 3210             txa
+ 3220             pha
+ 3230  ilba.prnt  ldx #4
+ 3240             jsr lba.prnt         ; jsr outbyte
+ 3250             pla
+ 3260             tax
+ 3270  lba0p.end  rts
+ 3280  ;
+ 3290  ;
+ 3300  ;
+ 3310  ;           Read and Write Files
+ 3320  ; 
+ 3330  istr.prnt  .de $9028
+ 3340  ptrn.match .de $902e
+ 3350  rtc.read   .de $901f
+ 3360  buffer.ptr .de $a0
+ 3370  genbuf.pt2 .de $a4
+ 3380  fsave.x    .de $a6
+ 3390  find.ptr   .de $a7
+ 3400  ;
+ 3410  ; DOS Buffers & Variables
+ 3420  ;
+ 3430  sectr.buff .de $0200
+ 3440  osctrlblk  .de $0300
+ 3450  cli.buffer .de osctrlblk        ;size 80
+ 3460  pattern    .de cli.buffer+80    ;size 32
+ 3470  date.buff  .de pattern+32       ;size 10
+ 3480  byte.count .de date.buff+10     ;size 2
+ 3490  imp.addr   .de byte.count+2     ;size 2
+ 3500  srch.num   .de imp.addr+2       ;size 1
+ 3510  ivmp.addr  .de $03fe
+ 3520  F.Aloc.Lst .de $0400
+ 3530  end.o.FAL  .de F.Aloc.Lst
+ 3540  dirnt.buff .de $0500
+ 3550  ;
+ 3560  ; Directory Entry Structure
+ 3570  ;
+ 3580  file.color .di $00              ;size 1
+ 3590  file.name  .di file.color+1     ;size 30
+ 3600  file.ver   .di file.name+30     ;size 1
+ 3610  file.size  .di file.ver+1       ;size 8
+ 3620  file.ctime .di file.size+8      ;size 8
+ 3630  file.mtime .di file.ctime+8     ;size 8
+ 3640  file.atrib .di file.mtime+8     ;size 4
+ 3650  file.load  .di file.atrib+4     ;size 4
+ 3660  file.loc   .di file.load+4      ;size 4
+ 3670  file.comnt .di file.loc+4
+ 3680  ;
+ 3690  of.bvffer  .de $3a0
+ 3700  ;
+ 3710  of.lba     .di $00              ;size 3
+ 3720  of.size    .di of.lba+3         ;size 2
+ 3730  of.flptr   .di of.size+2        ;size 2
+ 3740  of.flags   .di of.flptr+2       ;size 1
+ 3750  ;
+ 3760  ;
+ 3770  !!!getdate .md (dest)
+ 3780             pha
+ 3790             lda #l,dest
+ 3800             sta *buffer.ptr
+ 3810             lda #h,dest
+ 3820             sta *buffer.ptr+1
+ 3830             jsr rtc.read
+ 3840             pla
+ 3850             .me
+ 3860  ;
+ 3870  !!!datecpy .md (source dest)
+ 3880             pha
+ 3890             ldx #8
+ 3900  ...loop    lda source-1,x
+ 3910             sta dest-1,x
+ 3920             dex
+ 3930             bne ...loop
+ 3940             pla
+ 3950             .me
+ 3960  ;
+ 3970  !!!stdbl   .md (src dst)
+ 3980             lda #l,src
+ 3990             sta dst
+ 4000             lda #h,src
+ 4010             sta dst+1
+ 4020             .me
+ 4030  ;
+ 4040  !!!stdblz  .md (src dst)
+ 4050             lda #l,src
+ 4060             sta *dst
+ 4070             lda #h,src
+ 4080             sta *dst+1
+ 4090             .me
+ 4100  ;
+ 4110  !!!xfrdbl  .md (src dst)
+ 4120             lda src
+ 4130             sta dst
+ 4140             lda src+1
+ 4150             sta dst+1
+ 4160             .me
+ 4170  ;
+ 4180  !!!xfrdblz .md (src dst)
+ 4190             lda src
+ 4200             sta *dst
+ 4210             lda src+1
+ 4220             sta *dst+1
+ 4230             .me
+ 4240  ;
+ 4250  !!!decdbl  .md (loc)
+ 4260             lda loc
+ 4270             bne ...skip
+ 4280             dec loc+1
+ 4290  ...skip    dec loc
+ 4300             .me
+ 4310  ;
+ 4320  !!!cmpzdbl .md (loc)
+ 4330             lda loc
+ 4340             ora loc+1
+ 4350             .me
+ 4360  ;
+ 4370  !!!phdbl   .md (word.arg)
+ 4380             lda #h,word.arg
+ 4390             pha
+ 4400             lda #l,word.arg
+ 4410             pha
+ 4420             .me
+ 4430  ;
+ 4440  form.ilba  lda #fullpath
+ 4450             bit osflags
+ 4460             bne loadpth
+ 4470  loadcwd    lda cwd
+ 4480             sta ilba16
+ 4490             lda cwd+1
+ 4500             sta ilba24
+ 4510             rts
+ 4520  loadpth    lda path.user
+ 4530             sta ilba16
+ 4540             lda path.user+1
+ 4550             sta ilba24
+ 4560             rts
+ 4570  ;
+ 4580  setup.xfer bdos (diskinit)
+ 4590             ldx #0
+ 4600             stx ilba0
+ 4610             stx ilba8
+ 4620  ; stx ilba16
+ 4630  ; stx ilba24
+ 4640             jsr form.ilba
+ 4650             stdbl (sectr.buff dta.ptr)   ;set sector buffer address
+ 4660             xfrdblz (xfer.addr buffer.ptr) ;set r/w transfer ptr
+ 4670             xfrdbl (xfer.bytes byte.count);set transfer bytecount
+ 4680             lda filenum
+ 4690             sta ilba8    ;load 1 byte filenumber into lba8 register
+ 4700             rts
+ 4710  ;
+ 4720  writebytes jsr setup.xfer
+ 4730             beq exit     ; exit if trying to write to directory
+ 4740  sdump.loop ldy #0
+ 4750  cp.sectbuf lda (buffer.ptr),y   ; transfer source to sector buffer
+ 4760             sta sectr.buff,y
+ 4770             decdbl (byte.count)  ; Count bytes as transfered
+ 4780             cmpzdbl (byte.count)
+ 4790             beq finish           ; if all bytes transfered
+ 4800             iny
+ 4810             bne cp.sectbuf       ; until a sector is transfered
+ 4820             bdos (dumpsect)      ; write the sector buffer out
+ 4830             inc *buffer.ptr+1
+ 4840             beq exit             ;  if error end of memory
+ 4850             inc ilba0
+ 4860             bne sdump.loop       ; until error LBA0 is filled
+ 4870             rts
+ 4880  finish     iny
+ 4890             beq final.dump       ; if no padding needed
+ 4900             lda #$0
+ 4910  pad.loop   sta sectr.buff,y     ; pad sector buffer with zeros
+ 4920             iny
+ 4930             bne pad.loop
+ 4940  final.dump bdos (dumpsect)
+ 4950  exit       rts
+ 4960  ;
+ 4970  readbytes  jsr setup.xfer
+ 4980             bdos (loadsect)
+ 4990  sload.loop ldy #$0
+ 5000  cp.dest    lda sectr.buff,y
+ 5010             sta (buffer.ptr),y
+ 5020             decdbl (byte.count)
+ 5030             cmpzdbl (byte.count)
+ 5040             beq rd.finish
+ 5050             iny
+ 5060             bne cp.dest
+ 5070             inc ilba0
+ 5080             beq rd.finish
+ 5090             bdos (loadsect)
+ 5100             inc *buffer.ptr+1
+ 5110             bne sload.loop
+ 5120  rd.finish  rts
+ 5130  ;
+ 5140  wrt.dirent sta ilba0
+ 5150             lda #0
+ 5160             sta ilba8
+ 5170  ; sta ilba16
+ 5180  ; sta ilba24
+ 5190             jsr form.ilba
+ 5200             bdos (dumpsect)
+ 5210             lda ilba0
+ 5220             rts
+ 5230  ;
+ 5240  rd.dirent  sta ilba0
+ 5250             lda #0
+ 5260             sta ilba8
+ 5270  ; sta ilba16
+ 5280  ; sta ilba24
+ 5290             jsr form.ilba
+ 5300             bdos (loadsect)
+ 5310             lda ilba0
+ 5320             rts
+ 5330  ;
+ 5340  ;
+ 5350  writefile  stdbl (dirnt.buff dta.ptr)
+ 5360             getdate (dirnt.buff+file.mtime)
+ 5370             lda dirnt.buff+file.loc
+ 5380             bne over.write       ;if file number !0 overwrite
+ 5390             clc                  ;clear carry to read
+ 5400             jsr rw.flstack       ;read.FAL           ;else allocate new filenumbe 
+ 5410             jsr alloc.file
+ 5420             bne wrtfl.cont
+ 5430             sec
+ 5440             rts
+ 5450  wrtfl.cont datecpy (dirnt.buff+file.mtime dirnt.buff+file.ctime)
+ 5460             sta dirnt.buff+file.loc ;
+ 5470             pha
+ 5480             lda cwd
+ 5490             sta dirnt.buff+file.loc+1
+ 5500             lda cwd+1
+ 5510             and #lba24mask
+ 5520             sta dirnt.buff+file.loc+2
+ 5530             pla
+ 5540             jsr append.FAL
+ 5550             sec          ;set carry to write
+ 5560             jsr rw.flstack               ;write.FAL
+ 5570  over.write jsr wrt.dirent
+ 5580             sta filenum
+ 5590             xfrdbl (dirnt.buff+file.load xfer.addr)
+ 5600             xfrdbl (dirnt.buff+file.size xfer.bytes)
+ 5610             cmpzdbl (xfer.bytes)
+ 5620             beq wrtfl.end
+ 5630             jsr writebytes
+ 5640  wrtfl.end  clc
+ 5650             lda dirnt.buff+file.loc
+ 5660             sta ilba8
+ 5670             rts
+ 5680  ;
+ 5690  readfile   lda dirnt.buff+file.loc
+ 5700             sta filenum
+ 5710             xfrdbl (dirnt.buff+file.load xfer.addr)
+ 5720             xfrdbl (dirnt.buff+file.size xfer.bytes)
+ 5730             jsr readbytes
+ 5740             clc
+ 5750             rts
+ 5760  ;
+ 5770  alloc.file lda #1
+ 5780             sta srch.num
+ 5790  naloc.nxt  ldx end.o.FAL
+ 5800  naloc.loop dex
+ 5810             beq free.exit
+ 5820             lda F.Aloc.Lst,x
+ 5830             cmp srch.num
+ 5840             bne naloc.loop
+ 5850             inc srch.num
+ 5860             beq dirfulexit
+ 5870             bne naloc.nxt
+ 5880  free.exit  lda srch.num
+ 5890             sta ilba8
+ 5900             rts
+ 5910  dirfulexit lda #0
+ 5920             rts
+ 5930  ;
+ 5940  rw.flstack pha  ;set carry to write , clear carry for read
+ 5950             lda dta.ptr
+ 5960             pha
+ 5970             lda dta.ptr+1
+ 5980             pha
+ 5990             stdbl (F.Aloc.Lst dta.ptr)
+ 6000             lda #0
+ 6010             ldx #rddir
+ 6020             bcc readit
+ 6030             ldx #wrtdir
+ 6040  readit     jsr call.bdos
+ 6050             pla
+ 6060             sta dta.ptr+1
+ 6070             pla
+ 6080             sta dta.ptr
+ 6090             pla
+ 6100             rts
+ 6110  ;
+ 6120  ;
+ 6130  delete.FAL sta srch.num
+ 6140             ldx #0
+ 6150  Fdel.loop  inx
+ 6160             cpx end.o.FAL
+ 6170             bcs Fdel.end
+ 6180             lda F.Aloc.Lst,x
+ 6190             cmp srch.num
+ 6200             bne Fdel.loop
+ 6210  Fdel.dloop lda F.Aloc.Lst+1,x
+ 6220             sta F.Aloc.Lst,x
+ 6230             inx
+ 6240             cpx end.o.FAL
+ 6250             bcc Fdel.dloop
+ 6260             dec end.o.FAL
+ 6270             clc
+ 6280  Fdel.end   lda srch.num
+ 6290             rts
+ 6300  ;
+ 6310  append.FAL ldx end.o.FAL        ;F.Aloc.Lst
+ 6320             sta F.Aloc.Lst,x
+ 6330             inc end.o.FAL
+ 6340             rts
+ 6350  ;
+ 6360  ;insert.FAL rts
+ 6370  fndfl.init stdbl (sectr.buff dta.ptr)
+ 6380             stdblz (sectr.buff+file.name buffer.ptr)
+ 6390             stdblz (sectr.buff+file.name find.ptr)
+ 6400             clc                  ;clear carry to read
+ 6410             jsr rw.flstack       ;read.FAL
+ 6420             rts
+ 6430  ;
+ 6440  findnext   jsr fndfl.init
+ 6450             ldx *fsave.x
+ 6460             bne fndfl.loop
+ 6470  findfile   bdos (diskinit)
+ 6480             jsr fndfl.init
+ 6490             ldx end.o.FAL
+ 6500             lda #readfrwd
+ 6510             bit osflags
+ 6520             beq fndfl.loop
+ 6530             ldx #0
+ 6540  fndfl.loop lda #readfrwd
+ 6550             bit osflags
+ 6560             bne fndfl.frwd
+ 6570             dex
+ 6580             beq fndfl.notf
+ 6590             bne fndfl.cont
+ 6600  fndfl.frwd inx
+ 6610             cpx end.o.FAL
+ 6620             beq fndfl.notf       ;not found
+ 6630  fndfl.cont lda F.Aloc.Lst,x
+ 6640             stx *fsave.x
+ 6650             jsr rd.dirent
+ 6660             jsr ptrn.match
+ 6670             ldx *fsave.x
+ 6680             bcc fndfl.loop
+ 6690             lda F.Aloc.Lst,x
+ 6700             sta ilba8
+ 6710             rts
+ 6720  fndfl.notf clc
+ 6730             rts
+ 6740  ;
+ 6750  delfile    jsr delete.FAL
+ 6760             bcs del.exit
+ 6770             jsr rd.dirent
+ 6780             ldx #0
+ 6790             stx sectr.buff+file.color
+ 6800             jsr wrt.dirent
+ 6810             sec  ;set carry to write
+ 6820             jsr rw.flstack       ;write.FAL
+ 6830  del.exit   rts
+ 6840  ;
+ 6850  of.alloc   lda #$9
+ 6860  ofa.loop   tax
+ 6870             lda of.bvffer+of.flags,x
+ 6880             and #%00000001
+ 6890             beq ofa.cont
+ 6900             clc
+ 6910             txa
+ 6920             adc #$8
+ 6930             cmp #$49
+ 6940             bcc ofa.loop
+ 6950             lda #0
+ 6960             rts
+ 6970  ofa.cont   lda ilba8
+ 6980             sta of.bvffer+of.lba,x
+ 6990             lda ilba16
+ 7000             sta of.bvffer+of.lba+1,x
+ 7010             lda ilba24
+ 7020             sta of.bvffer+of.lba+2,x
+ 7030             lda #0
+ 7040             sta of.bvffer+of.flptr,x
+ 7050             sta of.bvffer+of.flptr+1,x
+ 7060             ldy #file.size
+ 7070             lda (ZT1),y
+ 7080             sta of.bvffer+of.size,x
+ 7090             iny
+ 7100             lda (ZT1),y
+ 7110             sta of.bvffer+of.size+1,x
+ 7120             lda #1
+ 7130             sta of.bvffer+of.flags,x
+ 7140             cpx of.bvffer
+ 7150             bcc ofa.exit
+ 7160             clc  ; stx of.bvffer
+ 7170             txa
+ 7180             adc #$8
+ 7190             sta of.bvffer
+ 7200  ofa.exit   txa
+ 7210             rts
+ 7220  ;
+ 7230  openfile   pha
+ 7240             jsr findfile
+ 7250             bcc ope.notfnd
+ 7260             pla
+ 7270             jsr of.alloc
+ 7280             beq ope.nferr        ; tax
+ 7290  ; lda sectr.buff+file.size
+ 7300  ; sta of.bvffer+of.size,x
+ 7310  ; lda sectr.buff+file.size+1
+ 7320  ; sta of.bvffer+of.size+1,x
+ 7330  ; txa
+ 7340             clc
+ 7350             rts
+ 7360  ope.notfnd pla
+ 7370             cmp #$1
+ 7380             beq ope.nferr
+ 7390             ldx #0
+ 7400             txa
+ 7410  ope.cloop  sta dirnt.buff,x
+ 7420             inx
+ 7430             bne ope.cloop
+ 7440             lda #'%
+ 7450             sta dirnt.buff+file.color
+ 7460             ldx #$ff
+ 7470  ope.cploop inx
+ 7480             lda pattern,x
+ 7490             sta dirnt.buff+file.name,x
+ 7500             bne ope.cploop
+ 7510             jsr writefile
+ 7520             jsr of.alloc
+ 7530             beq ope.nferr
+ 7540             clc
+ 7550             rts
+ 7560  ope.nferr  sec
+ 7570             rts
+ 7580  ;
+ 7590  ;
+ 7600  execfile   sta *buffer.ptr
+ 7610             sty *buffer.ptr+1
+ 7620             ldy #0
+ 7630  fncopy     lda (buffer.ptr),y
+ 7640             sta pattern,y
+ 7650             beq exec.cont
+ 7660             iny
+ 7670             bne fncopy
+ 7680  exec.cont  jsr findfile
+ 7690             bcs exec.fnd
+ 7700             lda #fullpath
+ 7710             sta osflags
+ 7720             lda #1
+ 7730             sta path.user
+ 7740             lda #0
+ 7750             sta path.user+1
+ 7760             jsr findfile
+ 7770             bcc exec.exit
+ 7780  ;
+ 7790  exec.fnd   lda sectr.buff+file.color
+ 7800             cmp #$2a
+ 7810             bne exec.exit
+ 7820  ;
+ 7830             ldx #0
+ 7840  sect.cpy   lda sectr.buff,x
+ 7850             sta dirnt.buff,x
+ 7860             inx
+ 7870             bne sect.cpy
+ 7880             jsr readfile
+ 7890             lda #0
+ 7900             sta osflags
+ 7910             jmp (xfer.addr)
+ 7920  exec.exit  rts
+ 7930  ;
+ 7940  rw.sectfh  php
+ 7950             tya
+ 7960             tax
+ 7970             ldy #0
+ 7980  rwsec.loop lda of.bvffer+of.lba,x
+ 7990             sta ilba8,y
+ 8000             iny
+ 8010             inx
+ 8020             cpy #3
+ 8030             bne rwsec.loop
+ 8040             ldx #loadsect
+ 8050             plp
+ 8060             bcs loadit
+ 8070             ldx #dumpsect
+ 8080  loadit     jsr call.bdos
+ 8090             rts
+ 8100  ;
+ 8110  ;
+ 8120  rw.dirfh   php
+ 8130             tya
+ 8140             tax
+ 8150             lda of.bvffer+of.lba,x
+ 8160             sta ilba0
+ 8170             lda #0
+ 8180             sta ilba8
+ 8190             lda of.bvffer+of.lba+1,x
+ 8200             sta ilba16
+ 8210             lda of.bvffer+of.lba+2,x
+ 8220             sta ilba24
+ 8230             ldx #loadsect
+ 8240             plp
+ 8250             bcs dfh.load
+ 8260             ldx #dumpsect
+ 8270  dfh.load   jsr call.bdos
+ 8280             rts
+ 8290  ;
+ 8300             .en
+ 8310  ;
+//
+
+>
