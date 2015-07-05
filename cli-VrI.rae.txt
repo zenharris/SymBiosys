@@ -1,0 +1,250 @@
+ 0020  ; Command Line Interface, Release I
+ 0030  ;
+ 0040  ; For Symbiosys with B.D.O.S. Ver. V
+ 0050  ;
+ 0060  ; By House Harris - June MMXII
+ 0070  ; Copyright (C) 2012 Michael Brown <symbiosys@b5.net>
+ 0080  ;
+ 0090  ; This program is free software: you can redistribute it and/or modify
+ 0100  ; it under the terms of the GNU General Public License as published by
+ 0110  ; the Free Software Foundation, either version 3 of the License, or
+ 0120  ; (at your option) any later version.
+ 0130  ;
+ 0140  ; This program is distributed in the hope that it will be useful, but
+ 0150  ; WITHOUT ANY WARRANTY; without even the implied warranty of
+ 0160  ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ 0170  ; General Public License for more details.
+ 0180  ;
+ 0190  ; You should have received a copy of the GNU General Public License
+ 0200  ; along with this program. If not, see <http://www.gnu.org/licenses/>
+ 0210  ;
+ 0220             .os
+ 0230             .es
+ 0240  xfer.addr  .de $396
+ 0250  xfer.bytes .de $398
+ 0260  filenum    .de $39c
+ 0270  cwd        .de $39d
+ 0280  argc       .de $37f
+ 0290  args       .de $380
+ 0300  argv[0]    .de $380
+ 0310  argv[1]    .de $382
+ 0320  argv[2]    .de $384
+ 0330  argc[3]    .de $386
+ 0340  ;
+ 0350  zargc      .de $4f
+ 0360  zargs      .de $50
+ 0370  zargv[0]   .de $50
+ 0380  ;
+ 0390  ;locvs.veci .de $a600
+ 0400  ;locvs.bdos .de $9200
+ 0410  monst.ctab .de $03fc
+ 0420  ;
+ 0430  init.bdos  .de $9009
+ 0440  ;
+ 0450  call.bdos  .de $9006
+ 0460  disk.init  .de $00
+ 0470  load.sect  .de $02
+ 0480  dump.sect  .de $04
+ 0490  setup.xfer .de $08
+ 0500  writebytes .de $0a
+ 0510  readbytes  .de $0c
+ 0520  execfile   .de $16
+ 0530  ;
+ 0540  hex.dumper .de $9f00
+ 0550  hex.cmd    .de $9f03
+ 0560  RAE.warm   .de $b003
+ 0570  ;
+ 0580  lib.puts   .de $9013
+ 0590  lib.parse  .de $9016
+ 0600  proc.cmnd  .de $9019
+ 0610  istr.prnt  .de $9028
+ 0620  ;
+ 0630  parm1.h    .de $a64f
+ 0640  parm1      .de $a64e
+ 0650  parm2.h    .de $a64d
+ 0660  parm2      .de $a64c
+ 0670  parm3.h    .de $a64b
+ 0680  parm3      .de $a64a
+ 0690  parms.num  .de $a649
+ 0700  ;
+ 0710  techo      .de $a653
+ 0720  urcvec     .de $a66c
+ 0730  ursvec     .de $a669
+ 0740  access     .de $8b86
+ 0750  naccess    .de $8b9c
+ 0760  warm       .de $8003
+ 0770  usrent     .de $8035
+ 0780  p2scr      .de $829c
+ 0790  outbyte    .de $82fa
+ 0800  outchr     .de $8a47
+ 0810  crlf       .de $834d
+ 0820  pshove     .de $8208
+ 0830  space      .de $8342
+ 0840  ;
+ 0850  line.edt   .de $9d00
+ 0860  line.ptr   .de $0012
+ 0870  line.bvff  .de $300
+ 0880  ;
+ 0890  prompt     .de $23
+ 0900  ;
+ 0910  ;
+ 0920  locvs.cmdi .de $9600
+ 0930  ;
+ 0940  osflags    .de $39f
+ 0950  showprgrs  .de %10000000
+ 0960  ;
+ 0970  !!!rstosfl .md (mask)
+ 0980             lda #mask
+ 0990             eor #$ff
+ 1000             and osflags
+ 1010             sta osflags
+ 1020             .me
+ 1030  !!!setosfl .md (mask)
+ 1040             lda #mask
+ 1050             ora osflags
+ 1060             sta osflags
+ 1070             .me
+ 1080  ;
+ 1090  !!!stdbl   .md (src dst)
+ 1100             lda #l,src
+ 1110             sta dst
+ 1120             lda #h,src
+ 1130             sta dst+1
+ 1140             .me
+ 1150  ;
+ 1160  !!!xfrdbl  .md (src dst)
+ 1170             lda src
+ 1180             sta dst
+ 1190             lda src+1
+ 1200             sta dst+1
+ 1210             .me
+ 1220  ;
+ 1230  !!!memcpy  .md (src dst num)
+ 1240             ldx #num
+ 1250  loop...    lda src-1,x
+ 1260             sta dst-1,x
+ 1270             dex
+ 1280             bne loop...
+ 1290             .me
+ 1300  ;
+ 1310  !!!decdbl  .md (loc)
+ 1320             lda loc
+ 1330             bne ...skip
+ 1340             dec loc+1
+ 1350  ...skip    dec loc
+ 1360             .me
+ 1370  ;
+ 1380  !!!phdbl   .md (loc)
+ 1390             lda #h,loc
+ 1400             pha
+ 1410             lda #l,loc
+ 1420             pha
+ 1430             .me
+ 1440  ;
+ 1450  !!!cmpzdbl .md (loc)
+ 1460             lda loc
+ 1470             ora loc+1
+ 1480             .me
+ 1490  ;
+ 1500  !!!zrgputs .md (zargv)
+ 1510             lda *zargv
+ 1520             ldy *zargv+1
+ 1530             jsr lib.puts
+ 1540             .me
+ 1550  ;
+ 1560  !!!puts    .md (strng)
+ 1570             lda #l,strng
+ 1580             ldy #h,strng
+ 1590             jsr lib.puts
+ 1600             .me
+ 1610  ;
+ 1620  !!!zargcmp .md (zargv monst.comp)
+ 1630             ldy #$ff
+ 1640  loop...    iny
+ 1650             lda (zargv),y
+ 1660             cmp (monst.comp),y
+ 1670             bne exit...
+ 1680             cmp #0
+ 1690             bne loop...
+ 1700  exit...    .me
+ 1710  ;
+ 1720  !!!exec    .md (zargv)
+ 1730             lda *zargv
+ 1740             ldy *zargv+1
+ 1750             ldx #execfile
+ 1760             jsr call.bdos
+ 1770             .me
+ 1780  ;
+ 1790  !!!bdos    .md (funct)
+ 1800             ldx #funct
+ 1810             jsr call.bdos
+ 1820             .me
+ 1830  ;
+ 1840  !!!parsarg .md (monst.line)
+ 1850             lda *monst.line
+ 1860             ldy *monst.line+1
+ 1870             jsr lib.parse
+ 1880             .me
+ 1890  ;
+ 1900  !!!proccmd .md (monst.cmnds)
+ 1910             lda monst.cmnds
+ 1920             ldy monst.cmnds+1
+ 1930             jsr proc.cmnd
+ 1940             .me
+ 1950  ;
+ 1960             .ba $9000
+ 1970  ; .ba $6000
+ 1980             jmp cold.entry
+ 1990             jmp warm.entry
+ 2000  ;
+ 2010  ; Gap For Other Module's entry points
+ 2020  ;
+ 2030             .ba $9040
+ 2040  cold.entry jsr access
+ 2050             jsr init.bdos
+ 2060             stdbl (locvs.cmdi monst.ctab) ;load location of command ptr
+ 2070             jsr naccess
+ 2080  ;
+ 2090             puts (salvete)
+ 2100             jsr crlf
+ 2110  ;
+ 2120  warm.entry ldx #$ff
+ 2130             txs
+ 2140  cmd.line   stdbl (line.bvff line.ptr)
+ 2150             lda #$00     ; default OS flags#showprgrs
+ 2160             sta osflags
+ 2170  getcmnd    lda #$0
+ 2180             tay
+ 2190             sta (line.ptr),y
+ 2200             jsr crlf
+ 2210             lda cwd
+ 2220             jsr outbyte
+ 2230             lda #prompt
+ 2240             jsr outchr
+ 2250             jsr space
+ 2260             jsr line.edt
+ 2270             jsr crlf
+ 2280  ;
+ 2290             parsarg (line.ptr)
+ 2300  ;
+ 2310             lda *zargc
+ 2320             beq cmd.line
+ 2330  ;
+ 2340             zrgputs (zargv[0])
+ 2350             jsr space
+ 2360  ;
+ 2370             proccmd (monst.ctab)
+ 2380             bcs cmd.line
+ 2390  ;
+ 2400  not.found  exec (zargv[0])
+ 2410             bne cmd.line
+ 2420             jsr istr.prnt
+ 2430             .by 'not found' $00
+ 2440  ;
+ 2450  error.end  jmp cmd.line
+ 2460  ;
+ 2470  salvete    .by 'Symbiosys Ver.V Rel.I' $0a $0d 'Jun.MMXII' $00
+ 2480             .en
+//
+
+>
