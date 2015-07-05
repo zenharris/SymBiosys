@@ -1,0 +1,651 @@
+ 0020  ;
+ 0030  ;  Common Library Functions
+ 0040  ;
+ 0050  ; For Symbiosys with B.D.O.S Ver. V
+ 0060  ;
+ 0070  ; By House Harris - June MMXII
+ 0080  ; Copyright (C) 2012 Michael Brown <symbiosys@b5.net>
+ 0090  ;
+ 0100  ; This program is free software: you can redistribute it and/or modify
+ 0110  ; it under the terms of the GNU General Public License as published by
+ 0120  ; the Free Software Foundation, either version 3 of the License, or
+ 0130  ; (at your option) any later version.
+ 0140  ;
+ 0150  ; This program is distributed in the hope that it will be useful, but
+ 0160  ; WITHOUT ANY WARRANTY; without even the implied warranty of
+ 0170  ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ 0180  ; General Public License for more details.
+ 0190  ;
+ 0200  ; You should have received a copy of the GNU General Public License
+ 0210  ; along with this program. If not, see <http://www.gnu.org/licenses/>
+ 0220  ;
+ 0230             .os
+ 0240  ;
+ 0250  ;
+ 0260  osflags    .de $39f     ; DOS control flags
+ 0270  expansion  .de $39d     ;$a60d 2 bytes for future expansion
+ 0280  filenum    .de $39c     ;$a60c
+ 0290  sectnum    .de $39b     ;$a60b
+ 0300  bytenum    .de $39a     ;$a60a
+ 0310  xfer.bytes .de $398     ;$a608 bytes to transfer 16 bit number
+ 0320  xfer.addr  .de $396     ;$a606 disk transfer addr 16 bit num
+ 0330  dta.ptr    .de $394     ;$a604     ; disk transfer buffer
+ 0340  ilba24     .de $393     ;$a603
+ 0350  ilba16     .de $392     ;$a602
+ 0360  ilba8      .de $391     ;$a601
+ 0370  ilba0      .de $390
+ 0380  ;
+ 0390  cwd        .de $39d
+ 0400  path.user  .de $3f8
+ 0410  ;
+ 0420  argc       .de $37f     ;$a60f
+ 0430  argv[0]    .de $380     ;$a610
+ 0440  argv[1]    .de $382     ;$a612
+ 0450  argv[2]    .de $384     ;$a614
+ 0460  argv[3]    .de $386     ;$a616
+ 0470  argv[4]    .de $388     ;$a618
+ 0480  argv[5]    .de $38a     ;$a61a
+ 0490  argv[6]    .de $38c
+ 0500  argv[7]    .de $38e
+ 0510  ;
+ 0520  zargc      .de $4f
+ 0530  zargv[0]   .de $50
+ 0540  zargv[1]   .de $52
+ 0550  zargv[2]   .de $54
+ 0560  zargv[3]   .de $56
+ 0570  zargv[4]   .de $58
+ 0580  zargv[5]   .de $5a
+ 0590  zargv[6]   .de $5c
+ 0600  zargv[7]   .de $5e
+ 0610  ;
+ 0620  buffer.ptr .de $a0
+ 0630  byte.conv  .de $a2
+ 0640  genbuf.pt2 .de $a4
+ 0650  return.ptr .de $a4
+ 0660  find.ptr   .de $a7
+ 0670  ;
+ 0680  warment    .de $8003
+ 0690  usrent     .de $8035
+ 0700  outbyte    .de $82fa
+ 0710  ascnib     .de $8275
+ 0720  outchar    .de $8a47
+ 0730  ;
+ 0740  getchar    .de $8a58
+ 0750  crlf       .de $834d
+ 0760  space      .de $8342
+ 0770  pshove     .de $8208
+ 0780  parnr      .de $a649
+ 0790  par3       .de $a64a
+ 0800  par2       .de $a64c
+ 0810  par1       .de $a64e
+ 0820  techo      .de $a653
+ 0830  ;
+ 0840  symbiosys  .de $9003
+ 0850  ;
+ 0860  call.bdos  .de $9006
+ 0870  findfile   .de $12
+ 0880  findnext   .de $14
+ 0890  execfile   .de $16
+ 0900  ;
+ 0910  ;
+ 0920  match1     .de $3f      ;?
+ 0930  matchn     .de $2a      ;*
+ 0940  ;
+ 0950  osctrlblk  .de $0300
+ 0960  cli.buffer .de osctrlblk        ;size 80
+ 0970  pattern    .de cli.buffer+80    ;size 32
+ 0980  date.buff  .de pattern+32       ;size 10
+ 0990  byte.count .de date.buff+10     ;size 2
+ 1000  ivmp.addr  .de byte.count+2     ;size 2
+ 1010  srch.num   .de ivmp.addr+2      ;size 1
+ 1020  ;
+ 1030  OpenedFile .de osctrlblk+$a0    ;size 64
+ 1040  OFile.Hndl .de osctrlblk+$e0    ;size 3
+ 1050  OFile.Sect .de OFile.Hndl+$03   ;size 1
+ 1060  OFile.Pntr .de OFile.Sect+$01   ;size 2
+ 1070  ;
+ 1080  sectr.buff .de $0200
+ 1090  ;
+ 1100  ;  Directory Entry Structure
+ 1110  ;
+ 1120  file.color .de $00      ;size 1
+ 1130  file.name  .de file.color+1     ;size 30
+ 1140  file.ver   .de file.name+30     ;size 1
+ 1150  file.size  .de file.ver+1       ;size 8
+ 1160  file.ctime .de file.size+8      ;size 8
+ 1170  file.mtime .de file.ctime+8     ;size 8
+ 1180  file.atrib .de file.mtime+8     ;size 4
+ 1190  file.load  .de file.atrib+4     ;size 4
+ 1200  file.loc   .de file.load+4      ;size 4
+ 1210  file.comnt .de file.loc+4       ;size 4
+ 1220  ;
+ 1230  F.Aloc.Lst .de $0400
+ 1240  end.o.FAL  .de F.Aloc.Lst
+ 1250  ;
+ 1260  dirnt.buff .de $0500
+ 1270  ;
+ 1280  rtc.ctrl   .de $7ff8
+ 1290  rtc.secs   .de $7ff9
+ 1300  rtc.mins   .de $7ffa
+ 1310  rtc.hour   .de $7ffb
+ 1320  rtc.day    .de $7ffc
+ 1330  rtc.date   .de $7ffd
+ 1340  rtc.month  .de $7ffe
+ 1350  rtc.year   .de $7fff
+ 1360  ;
+ 1370  verifymode .de %00000010
+ 1380  fullpath   .de %00000100
+ 1390  ;
+ 1400  !!!stdbl   .md (src dst)
+ 1410             pha
+ 1420             lda #l,src
+ 1430             sta dst
+ 1440             lda #h,src
+ 1450             sta dst+1
+ 1460             pla
+ 1470             .me
+ 1480  ;
+ 1490  !!!xfrdbl  .md (src dst)
+ 1500             pha
+ 1510             lda src
+ 1520             sta dst
+ 1530             lda src+1
+ 1540             sta dst+1
+ 1550             pla
+ 1560             .me
+ 1570  ;
+ 1580  !!!decdbl  .md (loc)
+ 1590             lda loc
+ 1600             bne ...skip
+ 1610             dec loc+1
+ 1620  ...skip    dec loc
+ 1630             .me
+ 1640  ;
+ 1650  !!!inczdbl .md (word)
+ 1660             inc *word
+ 1670             bne ...skip
+ 1680             inc *word+1
+ 1690  ...skip    .me
+ 1700  ;
+ 1710  !!!absoly  .md (base)
+ 1720             clc
+ 1730             tya
+ 1740             adc *base
+ 1750             sta *base
+ 1760             bcc ...skip
+ 1770             inc *base+1
+ 1780  ...skip    .me
+ 1790  ;
+ 1800  !!!cmpzdbl .md (loc)
+ 1810             lda loc
+ 1820             ora loc+1
+ 1830             .me
+ 1840  ;
+ 1850  !!!popdblz .md (zpage.arg)
+ 1860             pla
+ 1870             sta *zpage.arg
+ 1880             pla
+ 1890             sta *zpage.arg+1
+ 1900             .me
+ 1910  ;
+ 1920  !!!popdbl  .md (arg)
+ 1930             pla
+ 1940             sta arg
+ 1950             pla
+ 1960             sta arg+1
+ 1970             .me
+ 1980  ;
+ 1990  !!!pshdblz .md (zpage.arg)
+ 2000             lda *zpage.arg+1
+ 2010             pha
+ 2020             lda *zpage.arg
+ 2030             pha
+ 2040             .me
+ 2050  ;
+ 2060  !!!pshdbl  .md (arg)
+ 2070             lda arg+1
+ 2080             pha
+ 2090             lda arg
+ 2100             pha
+ 2110             .me
+ 2120  ;
+ 2130  !!!phdbl   .md (location)
+ 2140             lda #h,location
+ 2150             pha
+ 2160             lda #l,location
+ 2170             pha
+ 2180             .me
+ 2190  ;
+ 2200  !!!bdos    .md (funct)
+ 2210             ldx #funct
+ 2220             jsr call.bdos
+ 2230             .me
+ 2240  ;
+ 2250  !!!zrgputs .md (monst.zarg)
+ 2260             ldy #$ff
+ 2270  ...loop    iny
+ 2280             lda (monst.zarg),y
+ 2290             jsr outchar
+ 2300             bne ...loop
+ 2310             .me
+ 2320  ;
+ 2330  ;
+ 2340             .es
+ 2350             .ba $9010
+ 2360  ;
+ 2370             jmp error
+ 2380             jmp lib.puts
+ 2390             jmp lib.parse
+ 2400             jmp proc.cmnd
+ 2410             jmp date.prnt
+ 2420             jmp rtc.read
+ 2430             jmp rtc.write
+ 2440             jmp dir.prnt
+ 2450             jmp istr.prnt
+ 2460             jmp zarg.atoi
+ 2470             jmp ptrn.match
+ 2480             jmp proc.flist
+ 2490             jmp verify
+ 2500             jmp ver.prompt
+ 2510             jmp lba.prnt
+ 2520             jmp lib.parsfn
+ 2530  ;
+ 2540             .ba $9a00
+ 2550  ;
+ 2560  ;
+ 2570  zarg.atoi  sta *return.ptr
+ 2580             sty *return.ptr+1
+ 2590             cpx #$ff
+ 2600             beq lib.atoi
+ 2610             lda *zargv[0],x
+ 2620             sta *buffer.ptr
+ 2630             lda *zargv[0]+1,x
+ 2640             sta *buffer.ptr+1
+ 2650  lib.atoi   ldy #0
+ 2660             sty *byte.conv
+ 2670             sty *byte.conv+1
+ 2680  atoiloop   lda (buffer.ptr),y
+ 2690             beq atoiexit
+ 2700             cmp #$61
+ 2710             bcc notltr
+ 2720             cmp #$7b
+ 2730             bcs notltr
+ 2740             and #$df
+ 2750  notltr     jsr ascnib
+ 2760             bcs atoierror
+ 2770             ldx #4
+ 2780  atoishft   asl *byte.conv
+ 2790             rol *byte.conv+1
+ 2800             dex
+ 2810             bne atoishft
+ 2820             and #%00001111
+ 2830             ora *byte.conv
+ 2840             sta *byte.conv
+ 2850             iny
+ 2860             bne atoiloop
+ 2870  atoiexit   clc
+ 2880             ldy #00
+ 2890             lda *byte.conv
+ 2900             sta (return.ptr),y
+ 2910             lda *byte.conv+1
+ 2920             iny
+ 2930             sta (return.ptr),y
+ 2940  atoierror  rts
+ 2950  ;
+ 2960  error      jsr crlf
+ 2970             lda #'E
+ 2980             jsr outchar
+ 2990             txa
+ 3000             jsr outbyte
+ 3010             sec
+ 3020             rts
+ 3030  ;
+ 3040  date.prnt  txa
+ 3050             pha
+ 3060             tya
+ 3070             pha
+ 3080             ldx #0
+ 3090  dtprntloop lda date.frmt,x
+ 3100             beq dtprntend
+ 3110             cmp #$ff
+ 3120             bne dtprntskip
+ 3130             inx
+ 3140             ldy date.frmt,x
+ 3150             lda (buffer.ptr),y
+ 3160             jsr outbyte
+ 3170             jmp dtprntcont
+ 3180  dtprntskip jsr outchar
+ 3190  dtprntcont inx
+ 3200             bne dtprntloop
+ 3210  dtprntend  pla
+ 3220             tay
+ 3230             pla
+ 3240             tax
+ 3250             rts
+ 3260  ;
+ 3270  rtc.write  rts
+ 3280  ;
+ 3290  rtc.read   txa
+ 3300             pha
+ 3310             tya
+ 3320             pha
+ 3330             ldx #07
+ 3340             ldy #00
+ 3350             lda rtc.ctrl
+ 3360             ora #%01000000
+ 3370             sta rtc.ctrl
+ 3380  rdrtcloop  lda rtc.secs-1,x
+ 3390             and rtc.masks,y
+ 3400             sta (buffer.ptr),y
+ 3410             iny
+ 3420             dex
+ 3430             bne rdrtcloop
+ 3440             lda rtc.ctrl
+ 3450             and #%10111111
+ 3460             sta rtc.ctrl
+ 3470  rdrtcexit  pla
+ 3480             tay
+ 3490             pla
+ 3500             tax
+ 3510             rts
+ 3520  ;
+ 3530  dir.prnt   pha
+ 3540             txa
+ 3550             pha
+ 3560             tya
+ 3570             pha
+ 3580             ldx #0
+ 3590  prntdloop  lda dir.frmt,x
+ 3600             beq prntdexit
+ 3610             xfrdbl (dta.ptr buffer.ptr)
+ 3620  isstring   cmp #$fd
+ 3630             bne ischar
+ 3640             inx
+ 3650             ldy dir.frmt,x
+ 3660  strloop    lda (buffer.ptr),y
+ 3670             beq prntdcont
+ 3680             jsr outchar
+ 3690             iny
+ 3700             bne strloop
+ 3710             jmp prntdcont
+ 3720  ischar     cmp #$fc
+ 3730             bne isword
+ 3740             inx
+ 3750             ldy dir.frmt,x
+ 3760             lda (buffer.ptr),y
+ 3770             jsr outchar
+ 3780             jmp prntdcont
+ 3790  isword     cmp #$fe     ; print word
+ 3800             bne isdate
+ 3810             inx
+ 3820             ldy dir.frmt,x
+ 3830             lda (buffer.ptr),y
+ 3840             jsr outbyte
+ 3850             jmp prntdcont
+ 3860  isdate     cmp #$fb     ; Date
+ 3870             bne default
+ 3880             inx
+ 3890             ldy dir.frmt,x
+ 3900             absoly (buffer.ptr)
+ 3910             jsr date.prnt
+ 3920             jmp prntdcont
+ 3930  default    jsr outchar
+ 3940  prntdcont  inx
+ 3950             bne prntdloop
+ 3960  prntdexit  jsr crlf
+ 3970             pla
+ 3980             tay
+ 3990             pla
+ 4000             tax
+ 4010             pla
+ 4020             rts
+ 4030  ;
+ 4040  istr.prnt  pla
+ 4050             sta *buffer.ptr
+ 4060             pla
+ 4070             sta *buffer.ptr+1
+ 4080  psinb      ldy #1
+ 4090             lda (buffer.ptr),y
+ 4100             inc *buffer.ptr
+ 4110             bne psich0
+ 4120             inc *buffer.ptr+1
+ 4130  psich0     ora #0
+ 4140             beq psix1
+ 4150             jsr outchar
+ 4160             jmp psinb
+ 4170  psix1      inc *buffer.ptr
+ 4180             bne psix2
+ 4190             inc *buffer.ptr+1
+ 4200  psix2      jmp (buffer.ptr)
+ 4210  ;
+ 4220  lib.puts   sta *buffer.ptr
+ 4230             sty *buffer.ptr+1
+ 4240  strng.prnt tya
+ 4250             pha
+ 4260             ldy #0
+ 4270  strprloop  lda (buffer.ptr),y
+ 4280             beq strpreos
+ 4290             jsr outchar
+ 4300             iny
+ 4310             bne strprloop
+ 4320  strpreos   pla
+ 4330             tay
+ 4340             rts
+ 4350  ;
+ 4360  ptrn.match ldx #$00
+ 4370             ldy #$ff
+ 4380  ptrn.next  lda pattern,x
+ 4390             cmp #matchn
+ 4400             beq ptrn.star
+ 4410             iny
+ 4420             cmp #match1
+ 4430             bne ptrn.reg
+ 4440             lda (find.ptr),y
+ 4450             beq ptrn.fail
+ 4460  ptrn.reg   cmp (find.ptr),y
+ 4470             bne ptrn.fail
+ 4480             inx
+ 4490             cmp #0
+ 4500             bne ptrn.next
+ 4510  ptrn.found rts
+ 4520  ;
+ 4530  ptrn.star  inx
+ 4540             cmp pattern,x
+ 4550             beq ptrn.star
+ 4560  ptrn.loop  txa
+ 4570             pha
+ 4580             tya
+ 4590             pha
+ 4600             jsr ptrn.next
+ 4610             pla
+ 4620             tay
+ 4630             pla
+ 4640             tax
+ 4650             bcs ptrn.found
+ 4660             iny
+ 4670             lda (find.ptr),y
+ 4680             bne ptrn.loop
+ 4690  ptrn.fail  clc
+ 4700             rts
+ 4710  ;
+ 4720  ;
+ 4730  proc.flist bdos (findfile)
+ 4740             bcc pfl.exit
+ 4750             jsr crlf
+ 4760  pfl.loop   lda #verifymode
+ 4770             bit osflags
+ 4780             beq pfl.notver
+ 4790             jsr ver.prompt
+ 4800             bcc pfl.skip
+ 4810  pfl.notver jsr pfl.exec
+ 4820  pfl.skip   bdos (findnext)
+ 4830             bcs pfl.loop
+ 4840  pfl.exit   rts
+ 4850  pfl.exec   lda sectr.buff+file.loc
+ 4860             jmp (ivmp.addr)
+ 4870  ;
+ 4880  ver.prompt zrgputs (zargv[0])
+ 4890             jsr space
+ 4900             lda #'?
+ 4910             jsr outchar
+ 4920             jsr space
+ 4930             jsr dir.prnt
+ 4940  verify     lda #00
+ 4950             sta techo
+ 4960  ver.loop   jsr getchar
+ 4970             cmp #$03     ;ctrl-c cancel
+ 4980             beq ctrlc
+ 4990             cmp #$0d     ;ret accept file
+ 5000             beq ver.accept
+ 5010             cmp #$09     ;tab next file
+ 5020             bne ver.loop
+ 5030             clc
+ 5040             rts
+ 5050  ver.accept sec
+ 5060             rts
+ 5070  ctrlc      jmp symbiosys
+ 5080  ;
+ 5090  lib.parse  sta *buffer.ptr
+ 5100             sty *buffer.ptr+1
+ 5110             ldy #$ff
+ 5120             ldx #$0
+ 5130             stx argc
+ 5140             stx *zargc
+ 5150  parse.loop iny
+ 5160             lda (buffer.ptr),y
+ 5170             beq parse.end
+ 5180             cmp #$20
+ 5190             beq parse.loop
+ 5200             clc
+ 5210             tya
+ 5220             adc *buffer.ptr      ;#l,line.bvff
+ 5230             sta argv[0],x
+ 5240             sta *zargv[0],x
+ 5250             inx
+ 5260             lda #$00
+ 5270             adc *buffer.ptr+1    ;#h,line.bvff
+ 5280             sta argv[0],x
+ 5290             sta *zargv[0],x
+ 5300             inx
+ 5310             inc argc
+ 5320             inc *zargc
+ 5330             lda argc
+ 5340             cmp #$08     ; maximum number of parameters
+ 5350             beq parse.end
+ 5360  parm.loop  iny
+ 5370             lda (buffer.ptr),y
+ 5380             beq parse.end
+ 5390             cmp #$20
+ 5400             bne parm.loop
+ 5410             lda #$00
+ 5420             sta (buffer.ptr),y
+ 5430             jmp parse.loop
+ 5440  parse.end  rts
+ 5450  ;
+ 5460  tbl.lnth   .de $3fa
+ 5470  tbl.width  .de $3fb
+ 5480  ;
+ 5490  !!!zptrcmp .md (zptr.cmp1 zptr.cmp2)
+ 5500             ldy #$ff
+ 5510  loop...    iny
+ 5520             lda (zptr.cmp1),y
+ 5530             cmp (zptr.cmp2),y
+ 5540             bne exit...
+ 5550             cmp #0
+ 5560             bne loop...
+ 5570  exit...    .me
+ 5580  ;
+ 5590  proc.cmnd  sta *buffer.ptr
+ 5600             sty *buffer.ptr+1
+ 5610             ldy #0
+ 5620             ldx #0
+ 5630             lda (buffer.ptr),y
+ 5640             sta tbl.lnth
+ 5650             iny
+ 5660             lda (buffer.ptr),y
+ 5670             sta tbl.width
+ 5680             lda *buffer.ptr
+ 5690             clc
+ 5700             adc #3
+ 5710             sta *buffer.ptr
+ 5720             bcc prcmd.loop
+ 5730             inc *buffer.ptr+1
+ 5740             beq prcmd.exit
+ 5750  prcmd.loop zptrcmp (zargv[0] buffer.ptr)
+ 5760             bne prcmd.next
+ 5770             iny
+ 5780             lda (buffer.ptr),y
+ 5790             sta ivmp.addr
+ 5800             iny
+ 5810             lda (buffer.ptr),y
+ 5820             sta ivmp.addr+1
+ 5830             jsr prcmd.exec
+ 5840             sec
+ 5850             rts
+ 5860  prcmd.next inx
+ 5870             cpx tbl.lnth
+ 5880             beq prcmd.exit
+ 5890             lda *buffer.ptr
+ 5900             clc
+ 5910             adc tbl.width
+ 5920             sta *buffer.ptr
+ 5930             bcc prcmd.loop
+ 5940             inc *buffer.ptr+1
+ 5950             bne prcmd.loop
+ 5960  prcmd.exit clc
+ 5970             rts
+ 5980  prcmd.exec jmp (ivmp.addr)
+ 5990  ;
+ 6000  lba.prnt   pha
+ 6010  lbaprloop  lda ilba0-1,x
+ 6020             jsr outbyte
+ 6030             dex
+ 6040             bne lbaprloop
+ 6050             pla
+ 6060             rts
+ 6070  ;
+ 6080  ;
+ 6090  lib.parsfn ldy #$ff
+ 6100  pfn.loop   iny
+ 6110             lda (buffer.ptr),y
+ 6120             beq pfn.exit
+ 6130             cmp #':
+ 6140             bne pfn.loop
+ 6150             lda #0
+ 6160             sta (buffer.ptr),y
+ 6170             lda osflags
+ 6180             ora #fullpath
+ 6190             sta osflags
+ 6200             iny
+ 6210             tya
+ 6220             pha
+ 6230             ldx #$ff     ; set for preloaded buffer
+ 6240             lda #l,path.user
+ 6250             ldy #h,path.user
+ 6260             jsr zarg.atoi        ;lib.atoi
+ 6270             pla
+ 6280             bcs pfn.error
+ 6290  pfn.exit   clc
+ 6300  pfn.error  rts
+ 6310  ;
+ 6320  rtc.masks  .by %11111111        ;Year
+ 6330             .by %00011111        ;Month
+ 6340             .by %00111111        ;Date
+ 6350             .by %00000111        ;Day
+ 6360             .by %00111111        ;Hour
+ 6370             .by %01111111        ;Minute
+ 6380             .by %01111111        ;Second
+ 6390  ;
+ 6400  date.frmt  .by $ff $02 $2d $ff $01 $2d '20' $ff $00
+ 6410             .by $20 $ff $04 $3a $ff $05 $3a $ff $06 $00
+ 6420  ;
+ 6430  dir.frmt   .by $fb 48
+ 6440             .by $20 $fe 61 $fe 60
+ 6450             .by $20 $fe 33 $fe 32
+ 6460             .by $20 $fe 64
+ 6470             .by $20 $fc $00 $fd $01 $00
+ 6480             .en
+ 6490  ;
+//
+
+>
