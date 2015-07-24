@@ -2,7 +2,9 @@
 Symbiosys a 6502 operating system for IDE hard disks units.
 symbiosys@b5.net
 
-Just testing out how this all works, quickly uploaded a disk opperating system I wrote on a 1978 SYM-1 microcomputer a few years ago. I do intend getting back to this and recoding it in a real assembler rather the the Sym's Resident Assembler Editor (which actually is a very good resident assembler environment once it's patched to use Symbiosys filesystem.
+This is a disk opperating system I wrote on a 1978 SYM-1 microcomputer a few years ago. I do intend getting back to this and recoding it in a real assembler rather the the Sym's Resident Assembler Editor (which actually is a very good resident assembler environment once it's patched to use Symbiosys filesystem.
+
+I've started uploading the documentation in the Wiki, all will be explained in time.
 
 Get back to me if there is actually anyone interested in it, once recoded in any normal assembler it could easily be ported to any computer, it uses the VIA ports to transfer the data to and from the IDE disk so no interface hardware other than wires from the VIA to the IDE.
 
@@ -65,4 +67,3 @@ Corrected IORDY and DASP: 2010-Jul-31
 
 
 
-I'll tidy this all up if anyone has interest.
